@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ### Hi there 👋
 
 <!--
@@ -14,3 +15,11 @@ Here are some ideas to get you started:
 - 😄 Pronouns: ...
 - ⚡ Fun fact: ...
 -->
+=======
+### Hello! I'm Patrick.
+
+Golang enthusiast and just getting started on my journey to DevOps :)
+
+
+<sub>Last updated by magic on 5 Aug 2021.</sub>
+>>>>>>> 18c19ed (syncing stuff)
