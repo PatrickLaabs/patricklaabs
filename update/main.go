@@ -11,7 +11,7 @@ func makeReadme(filename string) error {
 	date := time.Now().Format("2 Jan 2006")
 
 	// Whisk together static and dynamic content until stiff peaks form
-	hello := "### Hello! I'm Patrick.\n\nGo enthusiast and just getting started on my journey to DevOps :)"
+	hello := "### Hello! I'm Patrick.\n\nGo enthusiast and just getting started on my journey to DevOps :) \n\n Will this be automated? :P"
 	updated := "<sub>Last updated by magic on " + date + ".</sub>"
 	data := fmt.Sprintf("%s\n\n\n%s\n", hello, updated)
 
