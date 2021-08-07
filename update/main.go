@@ -3,11 +3,12 @@ package main
 import (
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"time"
 )
 
-func makeReadme(filename string) error {
+func makeReadme(filename string) {
 	date := time.Now().Format("2 Jan 2006")
 
 	// Whisk together static and dynamic content until stiff peaks form
@@ -18,20 +19,17 @@ func makeReadme(filename string) error {
 	// Prepare file with a light coating of os
 	file, err := os.Create(filename)
 	if err != nil {
-		return err
+		log.Fatal(err)
 	}
 	defer file.Close()
 
 	// Bake at n bytes per second until golden brown
 	_, err = io.WriteString(file, data)
 	if err != nil {
-		return err
+		log.Fatal(err)
 	}
-	return file.Sync()
 }
 
 func main() {
-
 	makeReadme("../README.md")
-
 }
