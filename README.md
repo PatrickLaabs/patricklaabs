@@ -13,4 +13,4 @@ The other project I am working on is a go application, that catches inputs from 
 ![Image alt text](/images/gopher_with_coffee.gif)
 
 
-<sub>Lastest update on 7 Aug 2021 23:25 CET.</sub>
+<sub>Lastest update on 7 Aug 2021 23:27 +0700.</sub>
