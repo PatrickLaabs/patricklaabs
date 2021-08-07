@@ -9,7 +9,7 @@ import (
 )
 
 func makeReadme(filename string) {
-	date := time.Now().Format("2 Jan 2006 15:04 +0100 UTC")
+	date := time.Now().Format("2 Jan 2006 15:04 CET")
 
 	// Whisk together static and dynamic content until stiff peaks form
 	hello := "### Hello! I'm Patrick.\n\n" +
