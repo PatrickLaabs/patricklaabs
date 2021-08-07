@@ -11,7 +11,7 @@ func makeReadme(filename string) error {
 	date := time.Now().Format("2 Jan 2006")
 
 	// Whisk together static and dynamic content until stiff peaks form
-	hello := "### Hello! I'm Patrick.\n\nGo enthusiast and just getting started on my journey to DevOps :) \n\nCurrently I am building my Jenkins pipeline with some GitHub Actions & Workflows to have a full ci/cd pipeline up and running for my golang application.\nThe Golang Application is not ready yet and currently I am only getting the tests running.\nNext thing that I want to have running is Goreleaser... but this may take some time :D\n\n![Image alt text](/images/gopher_with_coffee.gif)"
+	hello := "### Hello! I'm Patrick.\n\nGo enthusiast and just getting started on my journey to DevOps :) \n\nCurrently I am building my Jenkins pipeline with some GitHub Actions & Workflows to have a full ci/cd pipeline up and running for my golang application.\nThe Golang Application is not ready yet and currently I am only getting the tests running.\n\nThe other project I am working on is a go application, that catches inputs from the terminal and saves it to a file. The hard part (for me at least) is to safe new inputs into a new line automaticly\n![Image alt text](/images/gopher_with_coffee.gif)"
 	updated := "<sub>Lastest update on " + date + ".</sub>"
 	data := fmt.Sprintf("%s\n\n\n%s\n", hello, updated)
 
