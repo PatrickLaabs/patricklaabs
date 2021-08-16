@@ -13,7 +13,7 @@ so no more rebuilding the pipe for every project.
 Well, lets see if this works out as intended. At least its empowered by goreleaser :heart:
 [https://github.com/PatrickLaabs/golang-pipeline](https://github.com/PatrickLaabs/golang-pipeline)
 
-[Image alt text](/images/gopher_with_coffee.gif)
+![Image alt text](/images/gopher_with_coffee.gif)
 
 
 <sub>Lastest update on 16 Aug 2021.</sub>
