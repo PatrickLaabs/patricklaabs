@@ -6,15 +6,14 @@
 
 ---
 
-I build a pipeline for/in GitHub Actions for golang projects. The Goal is to have a clean and easy to set up pipelinefor almost every golang project - so no more rebuilding the pipe for every project.
+I build a pipeline for/in GitHub Actions for golang projects.
+ The Goal is to have a clean and easy to set up pipelinefor almost every golang project
+so no more rebuilding the pipe for every project.
 
-Well, lets see if this works out as intended :P At least its empowered by goreleaser :heart:
+Well, lets see if this works out as intended. At least its empowered by goreleaser :heart:
 [https://github.com/PatrickLaabs/golang-pipeline](https://github.com/PatrickLaabs/golang-pipeline)
 
-line automaticly
-
-
-![Image alt text](/images/gopher_with_coffee.gif)
+[Image alt text](/images/gopher_with_coffee.gif)
 
 
 <sub>Lastest update on 16 Aug 2021.</sub>
