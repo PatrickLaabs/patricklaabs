@@ -14,7 +14,17 @@ func makeReadme(filename string) {
 	// Whisk together static and dynamic content until stiff peaks form
 	hello := "### Hello! I'm Patrick.\n\n" +
 		":v: Go enthusiast\n\n:muscle: DevOps lover\n\n" +
-		"Currently I am building my Jenkins pipeline with some GitHub Actions & Workflows to have a full ci/cd pipeline up and running for my golang application.\nThe Golang Application is not ready yet and currently I am only getting the tests running.\n\nThe other project I am working on is a go application, that catches inputs from the terminal and saves it to a file. The hard part (for me at least) is to safe new inputs into a new line automaticly\n\n\n![Image alt text](/images/gopher_with_coffee.gif)"
+		"---" +
+		"I build a pipeline for/in GitHub Actions for golang projects. The Goal is to have a clean and easy to set up pipeline\n\n" +
+		"for almost every golang project - so no more rebuilding the pipe for every project.\n\n" +
+		"Well, lets see if this works out as intended :P At least its empowered by goreleaser :heart:" +
+		"[golang-pipeline](https://github.com/PatrickLaabs/golang-pipeline)" +
+		"---" +
+		"Currently I am building my Jenkins pipeline with some GitHub Actions & Workflows to have a full ci/cd" +
+		"pipeline up and running for my golang application.\nThe Golang Application is not ready yet and currently" +
+		"I am only getting the tests running.\n\nThe other project I am working on is a go application, that catches" +
+		"inputs from the terminal and saves it to a file. The hard part (for me at least) is to safe new inputs into a new" +
+		"line automaticly\n\n\n![Image alt text](/images/gopher_with_coffee.gif)"
 	updated := "<sub>Lastest update on " + date + ".</sub>"
 	data := fmt.Sprintf("%s\n\n\n%s\n", hello, updated)
 
