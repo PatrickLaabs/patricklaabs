@@ -15,11 +15,11 @@ func makeReadme(filename string) {
 	hello := "### Hello! I'm Patrick.\n\n" +
 		":v: Go enthusiast\n\n:muscle: DevOps lover\n\n" +
 		"---\n\n" +
-		"I build a pipeline for/in GitHub Actions for golang projects. The Goal is to have a clean and easy to set up pipeline" +
-		"for almost every golang project - so no more rebuilding the pipe for every project.\n\n" +
-		"Well, lets see if this works out as intended :P At least its empowered by goreleaser :heart:\n" +
+		"I build a pipeline for/in GitHub Actions for golang projects.\n The Goal is to have a clean and easy to set up pipeline" +
+		"for almost every golang project\nso no more rebuilding the pipe for every project.\n\n" +
+		"Well, lets see if this works out as intended. At least its empowered by goreleaser :heart:\n" +
 		"[https://github.com/PatrickLaabs/golang-pipeline](https://github.com/PatrickLaabs/golang-pipeline)\n\n" +
-		"line automaticly\n\n\n![Image alt text](/images/gopher_with_coffee.gif)"
+		"[Image alt text](/images/gopher_with_coffee.gif)"
 	updated := "<sub>Lastest update on " + date + ".</sub>"
 	data := fmt.Sprintf("%s\n\n\n%s\n", hello, updated)
 
