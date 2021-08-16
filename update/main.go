@@ -14,12 +14,12 @@ func makeReadme(filename string) {
 	// Whisk together static and dynamic content until stiff peaks form
 	hello := "### Hello! I'm Patrick.\n\n" +
 		":v: Go enthusiast\n\n:muscle: DevOps lover\n\n" +
-		"---" +
-		"I build a pipeline for/in GitHub Actions for golang projects. The Goal is to have a clean and easy to set up pipeline\n\n" +
+		"---\n\n" +
+		"I build a pipeline for/in GitHub Actions for golang projects. The Goal is to have a clean and easy to set up pipeline" +
 		"for almost every golang project - so no more rebuilding the pipe for every project.\n\n" +
-		"Well, lets see if this works out as intended :P At least its empowered by goreleaser :heart:" +
-		"[golang-pipeline](https://github.com/PatrickLaabs/golang-pipeline)" +
-		"---" +
+		"Well, lets see if this works out as intended :P At least its empowered by goreleaser :heart:\n" +
+		"[https://github.com/PatrickLaabs/golang-pipeline](https://github.com/PatrickLaabs/golang-pipeline)\n" +
+		"---\n\n" +
 		"Currently I am building my Jenkins pipeline with some GitHub Actions & Workflows to have a full ci/cd" +
 		"pipeline up and running for my golang application.\nThe Golang Application is not ready yet and currently" +
 		"I am only getting the tests running.\n\nThe other project I am working on is a go application, that catches" +
