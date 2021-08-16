@@ -19,7 +19,7 @@ func makeReadme(filename string) {
 		"for almost every golang project\nso no more rebuilding the pipe for every project.\n\n" +
 		"Well, lets see if this works out as intended. At least its empowered by goreleaser :heart:\n" +
 		"[https://github.com/PatrickLaabs/golang-pipeline](https://github.com/PatrickLaabs/golang-pipeline)\n\n" +
-		"[Image alt text](/images/gopher_with_coffee.gif)"
+		"![Image alt text](/images/gopher_with_coffee.gif)"
 	updated := "<sub>Lastest update on " + date + ".</sub>"
 	data := fmt.Sprintf("%s\n\n\n%s\n", hello, updated)
 
