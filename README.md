@@ -16,4 +16,4 @@ Well, lets see if this works out as intended. At least its empowered by goreleas
 ![Image alt text](/images/gopher_with_coffee.gif)
 
 
-<sub>Lastest update on 26 Jan 2022.</sub>
+<sub>Lastest update on 27 Jan 2022.</sub>
