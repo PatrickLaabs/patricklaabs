@@ -7,4 +7,4 @@
 ![Image alt text](/images/gopher_with_coffee.gif)
 
 
-<sub>Lastest update on 14 Jan 2024.</sub>
+<sub>Lastest update on 15 Jan 2024.</sub>
