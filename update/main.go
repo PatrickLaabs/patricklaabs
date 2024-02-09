@@ -21,7 +21,7 @@ func makeReadme(filename string) {
 		    '<a href="https://www.buymeacoffee.com/patricklaabs" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>\n' +
 		    "Thank you very much, for supporting me 🚀"
 	updated := "<sub>Lastest update on " + date + ".</sub>"
-	data := fmt.Sprintf("%s\n\n\n%s\n", hello, updated)
+	data := fmt.Sprintf("%s\n\n\n%s\n", hello, support, updated)
 
 	// Prepare file with a light coating of os
 	file, err := os.Create(filename)
