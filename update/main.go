@@ -15,6 +15,11 @@ func makeReadme(filename string) {
 	hello := ":v: Go enthusiast\n\n:muscle: DevOps lover\n\n" +
 		"---\n\n" +
 		"![Image alt text](/images/gopher_with_coffee.gif)"
+	support := "## Support\n\n" +
+		    "You like the project, and want to support further development?\n\n" +
+		    "Glad to hear!\n" +
+		    '<a href="https://www.buymeacoffee.com/patricklaabs" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/default-orange.png" alt="Buy Me A Coffee" height="41" width="174"></a>\n' +
+		    "Thank you very much, for supporting me 🚀"
 	updated := "<sub>Lastest update on " + date + ".</sub>"
 	data := fmt.Sprintf("%s\n\n\n%s\n", hello, updated)
 
