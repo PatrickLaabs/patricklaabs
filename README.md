@@ -19,4 +19,5 @@ Thank you very much, for supporting me 🚀
 
 
 
-%!(EXTRA string=<sub>Lastest update on 9 Feb 2024.</sub>)
+
+<sub>Lastest update on 9 Feb 2024.</sub>
