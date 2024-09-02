@@ -20,4 +20,4 @@ Thank you very much, for supporting me 🚀
 
 
 
-<sub>Lastest update on 1 Sep 2024.</sub>
+<sub>Lastest update on 2 Sep 2024.</sub>
