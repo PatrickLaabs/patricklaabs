@@ -11,31 +11,31 @@ import (
 func makeReadme(filename string) {
 	date := time.Now().Format("2 Jan 2006")
 
-	// Whisk together static and dynamic content until stiff peaks form
-	hello := ":v: Go enthusiast\n\n:muscle: DevOps lover\n\n" +
-		"---\n\n" +
-		"![Image alt text](/images/gopher_with_coffee.gif)"
+	intro := "# 👋 Hi, I'm Patrick!\n\n" +
+		"♥️ Go Developer  \n" +
+		"☁️ Cloud-Native Geek  \n" +
+		"👨🏼‍💻 C Enthusiast  \n\n---\n\n" +
+		"🚀 Maintainer of [CAAPC](https://github.com/PatrickLaabs/cluster-api-addon-provider-cdk8s)  \n" +
+		"🔗 Contributor to [Cluster API (CAPI)](https://github.com/kubernetes-sigs/cluster-api) & [CAPV](https://github.com/kubernetes-sigs/cluster-api-provider-vsphere)\n\n---\n\n"
+
+	gopher := "![Gopher with Coffee](/images/gopher_with_coffee.gif)\n\n"
+
 	support := "## Support\n\n" +
-		"You like the project, and want to support further development?\n\n" +
+		"You like the project, and want to support further development?  \n" +
 		"Glad to hear!\n\n" +
 		"<a href='https://www.buymeacoffee.com/patricklaabs' target='_blank'><img src='https://cdn.buymeacoffee.com/buttons/default-orange.png' alt='Buy Me A Coffee' height='41' width='174'></a>\n\n" +
-		"Thank you very much, for supporting me 🚀\n\n\n"
-	updated := "<sub>Lastest update on " + date + ".</sub>"
-	data := fmt.Sprintf("%s\n\n\n%s\n\n%s", hello, support, updated)
+		"Thank you very much, for supporting me 🚀\n\n"
 
-	// Prepare file with a light coating of os
+	updated := fmt.Sprintf("<sub>Latest update on %s.</sub>", date)
+
+	data := fmt.Sprintf("%s%s%s%s\n", intro, gopher, support, updated)
+
 	file, err := os.Create(filename)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer func(file *os.File) {
-		err := file.Close()
-		if err != nil {
+	defer file.Close()
 
-		}
-	}(file)
-
-	// Bake at n bytes per second until golden brown
 	_, err = io.WriteString(file, data)
 	if err != nil {
 		log.Fatal(err)
