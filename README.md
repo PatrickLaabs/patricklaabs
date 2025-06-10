@@ -1,25 +1,55 @@
 # 👋 Hi, I'm Patrick!
 
-♥️ Go Developer  
-☁️ Cloud-Native Geek  
-👨🏼‍💻 C Enthusiast  
+![Profile Banner](https://img.shields.io/badge/Go-Developer-00ADD8?style=flat-square&logo=go)
+![Cloud-Native](https://img.shields.io/badge/Cloud--Native-4285F4?logo=google-cloud&logoColor=white)
+![C Enthusiast](https://img.shields.io/badge/C-Enthusiast-00599C?logo=c&logoColor=white)
+![Visitors](https://visitor-badge.laobi.icu/badge?page_id=PatrickLaabs.patricklaabs)
 
 ---
 
-🚀 Maintainer of [CAAPC](https://github.com/PatrickLaabs/cluster-api-addon-provider-cdk8s)  
-🔗 Contributor to [Cluster API (CAPI)](https://github.com/kubernetes-sigs/cluster-api) & [CAPV](https://github.com/kubernetes-sigs/cluster-api-provider-vsphere)
+## 🧑‍💻 About Me
+
+I'm a Go developer passionate about cloud-native infrastructure, open source, and modern DevOps. I love building scalable solutions and contributing to the community. Always learning, always caffeinated ☕.
 
 ---
 
-![Gopher with Coffee](/images/gopher_with_coffee.gif)
+## 🚀 Projects & Contributions
 
-## Support
+- 🛠️ **Maintainer:** [CAAPC](https://github.com/PatrickLaabs/cluster-api-addon-provider-cdk8s)
+- 🤝 **Contributor:** [Cluster API (CAPI)](https://github.com/kubernetes-sigs/cluster-api) & [CAPV](https://github.com/kubernetes-sigs/cluster-api-provider-vsphere)
 
-You like the project, and want to support further development?  
-Glad to hear!
+---
 
-<a href='https://www.buymeacoffee.com/patricklaabs' target='_blank'><img src='https://cdn.buymeacoffee.com/buttons/default-orange.png' alt='Buy Me A Coffee' height='41' width='174'></a>
+## 🔧 Tech Stack
 
-Thank you very much, for supporting me 🚀
+![Go](https://img.shields.io/badge/-Go-00ADD8?logo=go&logoColor=white)
+![C](https://img.shields.io/badge/-C-00599C?logo=c&logoColor=white)
+![Kubernetes](https://img.shields.io/badge/-Kubernetes-326CE5?logo=kubernetes&logoColor=white)
+![Docker](https://img.shields.io/badge/-Docker-2496ED?logo=docker&logoColor=white)
+![Linux](https://img.shields.io/badge/-Linux-FCC624?logo=linux&logoColor=black)
+![GitHub Actions](https://img.shields.io/badge/-GitHub%20Actions-2088FF?logo=github-actions&logoColor=white)
+
+---
+
+<p align="center">
+  <img src="/images/gopher_with_coffee.gif" alt="Gopher with Coffee" width="250"/>
+</p>
+
+---
+
+## ☕ Support My Work
+
+> **Like what I do?**  
+> Help fuel more open source contributions!
+
+<p>
+  <a href='https://www.buymeacoffee.com/patricklaabs' target='_blank'>
+    <img src='https://cdn.buymeacoffee.com/buttons/default-orange.png' alt='Buy Me A Coffee' height='41' width='174'>
+  </a>
+</p>
+
+Thank you very much for your support 🚀
+
+---
 
 <sub>Latest update on 10 Jun 2025.</sub>
