@@ -11,24 +11,62 @@ import (
 func makeReadme(filename string) {
 	date := time.Now().Format("2 Jan 2006")
 
-	intro := "# 👋 Hi, I'm Patrick!\n\n" +
-		"♥️ Go Developer  \n" +
-		"☁️ Cloud-Native Geek  \n" +
-		"👨🏼‍💻 C Enthusiast  \n\n---\n\n" +
-		"🚀 Maintainer of [CAAPC](https://github.com/PatrickLaabs/cluster-api-addon-provider-cdk8s)  \n" +
-		"🔗 Contributor to [Cluster API (CAPI)](https://github.com/kubernetes-sigs/cluster-api) & [CAPV](https://github.com/kubernetes-sigs/cluster-api-provider-vsphere)\n\n---\n\n"
+	readme := `# 👋 Hi, I'm Patrick!
 
-	gopher := "![Gopher with Coffee](/images/gopher_with_coffee.gif)\n\n"
+![Profile Banner](https://img.shields.io/badge/Go-Developer-00ADD8?style=flat-square&logo=go)
+![Cloud-Native](https://img.shields.io/badge/Cloud--Native-4285F4?logo=google-cloud&logoColor=white)
+![C Enthusiast](https://img.shields.io/badge/C-Enthusiast-00599C?logo=c&logoColor=white)
+![Visitors](https://visitor-badge.laobi.icu/badge?page_id=PatrickLaabs.patricklaabs)
 
-	support := "## Support\n\n" +
-		"You like the project, and want to support further development?  \n" +
-		"Glad to hear!\n\n" +
-		"<a href='https://www.buymeacoffee.com/patricklaabs' target='_blank'><img src='https://cdn.buymeacoffee.com/buttons/default-orange.png' alt='Buy Me A Coffee' height='41' width='174'></a>\n\n" +
-		"Thank you very much, for supporting me 🚀\n\n"
+---
 
-	updated := fmt.Sprintf("<sub>Latest update on %s.</sub>", date)
+## 🧑‍💻 About Me
 
-	data := fmt.Sprintf("%s%s%s%s\n", intro, gopher, support, updated)
+I'm a Go developer passionate about cloud-native infrastructure, open source, and modern DevOps. I love building scalable solutions and contributing to the community. Always learning, always caffeinated ☕.
+
+---
+
+## 🚀 Projects & Contributions
+
+- 🛠️ **Maintainer:** [CAAPC](https://github.com/PatrickLaabs/cluster-api-addon-provider-cdk8s)
+- 🤝 **Contributor:** [Cluster API (CAPI)](https://github.com/kubernetes-sigs/cluster-api) & [CAPV](https://github.com/kubernetes-sigs/cluster-api-provider-vsphere)
+
+---
+
+## 🔧 Tech Stack
+
+![Go](https://img.shields.io/badge/-Go-00ADD8?logo=go&logoColor=white)
+![C](https://img.shields.io/badge/-C-00599C?logo=c&logoColor=white)
+![Kubernetes](https://img.shields.io/badge/-Kubernetes-326CE5?logo=kubernetes&logoColor=white)
+![Docker](https://img.shields.io/badge/-Docker-2496ED?logo=docker&logoColor=white)
+![Linux](https://img.shields.io/badge/-Linux-FCC624?logo=linux&logoColor=black)
+![GitHub Actions](https://img.shields.io/badge/-GitHub%20Actions-2088FF?logo=github-actions&logoColor=white)
+
+---
+
+<p align="center">
+  <img src="/images/gopher_with_coffee.gif" alt="Gopher with Coffee" width="250"/>
+</p>
+
+---
+
+## ☕ Support My Work
+
+> **Like what I do?**  
+> Help fuel more open source contributions!
+
+<p>
+  <a href='https://www.buymeacoffee.com/patricklaabs' target='_blank'>
+    <img src='https://cdn.buymeacoffee.com/buttons/default-orange.png' alt='Buy Me A Coffee' height='41' width='174'>
+  </a>
+</p>
+
+Thank you very much for your support 🚀
+
+---
+
+<sub>Latest update on ` + date + `.</sub>
+`
 
 	file, err := os.Create(filename)
 	if err != nil {
@@ -36,7 +74,7 @@ func makeReadme(filename string) {
 	}
 	defer file.Close()
 
-	_, err = io.WriteString(file, data)
+	_, err = io.WriteString(file, readme)
 	if err != nil {
 		log.Fatal(err)
 	}
