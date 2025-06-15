@@ -28,7 +28,7 @@ I'm a Go developer passionate about cloud-native infrastructure, open source, an
 ## 🚀 Projects & Contributions
 
 - 🛠️ **Maintainer:** [CAAPC](https://github.com/PatrickLaabs/cluster-api-addon-provider-cdk8s)
-- 🤝 **Contributor:** [Cluster API (CAPI)](https://github.com/kubernetes-sigs/cluster-api) & [CAPV](https://github.com/kubernetes-sigs/cluster-api-provider-vsphere)
+- 🤝 **Contributor:** [Cluster API (CAPI)](https://github.com/kubernetes-sigs/cluster-api) & [CAPV](https://github.com/kubernetes-sigs/cluster-api-provider-vsphere) & [CAPHV](https://github.com/rancher-sandbox/cluster-api-provider-harvester)
 
 ---
 
