@@ -28,7 +28,7 @@ I'm a Go developer passionate about cloud-native infrastructure, open source, an
 ## 🚀 Projects & Contributions
 
 - 🛠️ **Maintainer of:** 
-     - [CAAPC](https://github.com/PatrickLaabs/cluster-api-addon-provider-cdk8s)
+     - [CAAPC](https://github.com/eitco/cluster-api-addon-provider-cdk8s)
 
 - 🤝 **Contributor of:** 
      - [Kubernetes](https://github.com/kubernetes/kubernetes)
