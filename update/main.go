@@ -25,12 +25,13 @@ I'm a Go developer passionate about cloud-native infrastructure, open source, an
 
 ---
 
-## 🚀 Projects & Contributions
+## Projects & Contributions
+- **Member of Kubernetes**
 
-- 🛠️ **Maintainer of:** 
+- **Maintainer of:** 
      - [CAAPC](https://github.com/eitco/cluster-api-addon-provider-cdk8s)
 
-- 🤝 **Contributor of:** 
+- **Contributor of:** 
      - [Kubernetes](https://github.com/kubernetes/kubernetes)
      - [Cluster API (CAPI)](https://github.com/kubernetes-sigs/cluster-api)
      - [CAPV](https://github.com/kubernetes-sigs/cluster-api-provider-vsphere)
