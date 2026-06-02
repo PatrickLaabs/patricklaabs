@@ -59,4 +59,4 @@ Thank you very much for your support 🚀
 
 ---
 
-<sub>Latest update on 1 Jun 2026.</sub>
+<sub>Latest update on 2 Jun 2026.</sub>
