@@ -27,7 +27,7 @@ func main() {
 
 	http.HandleFunc("/clicked", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
-		fmt.Fprint(w, "<div><b>Thanks for clicking! This was loaded via HTMX.</b></div>")
+		fmt.Fprint(w, `<div class="bg-green-50 text-green-800 p-4 rounded-md border border-green-200 font-medium">Thanks for clicking! This content was loaded dynamically via HTMX without a full page reload.</div>`)
 	})
 
 	fmt.Println("Server listening on :8080")

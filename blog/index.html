@@ -5,30 +5,36 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Patrick's Blog</title>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    <style>
-        body { font-family: sans-serif; max-width: 800px; margin: 0 auto; padding: 2rem; line-height: 1.6; }
-        header { text-align: center; margin-bottom: 2rem; border-bottom: 1px solid #ccc; padding-bottom: 1rem; }
-        .post { margin-bottom: 2rem; border: 1px solid #eee; padding: 1rem; border-radius: 5px; }
-        button { padding: 0.5rem 1rem; background-color: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
-        button:hover { background-color: #0056b3; }
-    </style>
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-    <header>
-        <h1>Patrick's Blog</h1>
-        <p>Go Developer, Cloud-Native Enthusiast</p>
-    </header>
+<body class="bg-gray-50 text-gray-800 font-sans leading-relaxed">
+    <div class="max-w-3xl mx-auto px-4 py-8">
+        <header class="text-center mb-12 border-b border-gray-200 pb-8">
+            <h1 class="text-5xl font-extrabold text-gray-900 tracking-tight mb-2">Patrick's Blog</h1>
+            <p class="text-xl text-gray-600 font-light">Go Developer, Cloud-Native Enthusiast</p>
+        </header>
 
-    <main>
-        <section class="post">
-            <h2>Welcome to my personal blog</h2>
-            <p>This blog is built using Go, HTMX, and Ko.</p>
+        <main>
+            <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-8 mb-8 transition hover:shadow-md">
+                <h2 class="text-2xl font-bold text-gray-900 mb-4">Welcome to my personal blog</h2>
+                <p class="text-gray-700 mb-6">This blog is built using Go, HTMX, and Ko.</p>
 
-            <div id="htmx-demo">
-                <p>Click the button below to test HTMX integration:</p>
-                <button hx-get="/clicked" hx-swap="outerHTML">Click Me</button>
-            </div>
-        </section>
-    </main>
+                <div id="htmx-demo" class="bg-blue-50 rounded-lg p-6 border border-blue-100">
+                    <p class="text-blue-900 mb-4 font-medium">Click the button below to test HTMX integration:</p>
+                    <button
+                        hx-get="/clicked"
+                        hx-swap="outerHTML"
+                        class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-md shadow-sm transition duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                    >
+                        Click Me
+                    </button>
+                </div>
+            </section>
+        </main>
+
+        <footer class="text-center mt-12 text-gray-500 text-sm">
+            <p>&copy; 2026 Patrick Laabs</p>
+        </footer>
+    </div>
 </body>
 </html>
