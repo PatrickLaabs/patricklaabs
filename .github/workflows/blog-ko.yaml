@@ -36,7 +36,7 @@ jobs:
 
       - name: Build and Push Image
         env:
-          KO_DOCKER_REPO: ghcr.io/patricklaabs/project-destiny-website
+          KO_DOCKER_REPO: ghcr.io/patricklaabs/patricklaabs
         run: |
           cd blog
           # If it's a pull request, just build locally
