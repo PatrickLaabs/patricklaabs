@@ -1,0 +1,50 @@
+name: Build and Push with KO
+
+on:
+  push:
+    tags:
+      - '*'
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'blog/go.mod'
+
+      - name: Set up ko
+        uses: ko-build/setup-ko@v0.8
+
+      - name: Log in to the Container registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GH_SECRET }}
+
+      - name: Build and Push Image
+        env:
+          KO_DOCKER_REPO: ghcr.io/patricklaabs/project-destiny-website
+        run: |
+          cd blog
+          # If it's a pull request, just build locally
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            export KO_DOCKER_REPO=ko.local
+            ko build . --bare
+          else
+            # Extract tag name from github ref
+            TAG_NAME=${GITHUB_REF#refs/tags/}
+            ko build . --bare --tags latest,$TAG_NAME
+          fi
