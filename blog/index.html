@@ -6,6 +6,20 @@
     <title>Patrick's Blog</title>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .markdown-content h1 { font-size: 2.25rem; font-weight: 800; margin-bottom: 1rem; color: #111827; }
+        .markdown-content h2 { font-size: 1.875rem; font-weight: 700; margin-top: 2rem; margin-bottom: 1rem; color: #1f2937; }
+        .markdown-content h3 { font-size: 1.5rem; font-weight: 600; margin-top: 1.5rem; margin-bottom: 0.75rem; color: #374151; }
+        .markdown-content p { margin-bottom: 1.25rem; color: #4b5563; }
+        .markdown-content ul { list-style-type: disc; margin-left: 1.5rem; margin-bottom: 1.25rem; color: #4b5563; }
+        .markdown-content ol { list-style-type: decimal; margin-left: 1.5rem; margin-bottom: 1.25rem; color: #4b5563; }
+        .markdown-content a { color: #2563eb; text-decoration: underline; }
+        .markdown-content a:hover { color: #1d4ed8; }
+        .markdown-content pre { background-color: #f3f4f6; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; margin-bottom: 1.25rem; }
+        .markdown-content code { font-family: monospace; background-color: #f3f4f6; padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-size: 0.875em; }
+        .markdown-content pre code { background-color: transparent; padding: 0; }
+        .markdown-content blockquote { border-left-width: 4px; border-color: #e5e7eb; padding-left: 1rem; font-style: italic; color: #6b7280; margin-bottom: 1.25rem; }
+    </style>
 </head>
 <body class="bg-gray-50 text-gray-800 font-sans leading-relaxed">
     <div class="max-w-3xl mx-auto px-4 py-8">
@@ -30,6 +44,16 @@
                     </button>
                 </div>
             </section>
+
+            {{if .Posts}}
+            <div class="space-y-8">
+                {{range .Posts}}
+                <article class="bg-white rounded-xl shadow-sm border border-gray-100 p-8 transition hover:shadow-md markdown-content">
+                    {{.Content}}
+                </article>
+                {{end}}
+            </div>
+            {{end}}
         </main>
 
         <footer class="text-center mt-12 text-gray-500 text-sm">
