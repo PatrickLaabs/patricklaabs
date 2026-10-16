@@ -3,10 +3,13 @@ name: Build and Push with KO
 on:
   push:
     tags:
-      - '*'
+      - '[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+'
   pull_request:
     branches:
       - main
+
+permissions: {}
 
 jobs:
   build:
@@ -16,35 +19,39 @@ jobs:
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
         with:
           go-version-file: 'blog/go.mod'
 
+      - name: Check for known vulnerabilities
+        working-directory: blog
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+
       - name: Set up ko
-        uses: ko-build/setup-ko@v0.8
+        uses: ko-build/setup-ko@d982fec422852203cfb2053a8ec6ad302280d04d # v0.8
 
       - name: Log in to the Container registry
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GH_SECRET }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and Push Image
+        working-directory: blog
         env:
           KO_DOCKER_REPO: ghcr.io/patricklaabs/patricklaabs
         run: |
-          cd blog
           # If it's a pull request, just build locally
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
+          if [ "$GITHUB_EVENT_NAME" == "pull_request" ]; then
             export KO_DOCKER_REPO=ko.local
             ko build . --bare
           else
-            # Extract tag name from github ref
-            TAG_NAME=${GITHUB_REF#refs/tags/}
-            ko build . --bare --tags latest,$TAG_NAME
+            ko build . --bare --tags "latest,$GITHUB_REF_NAME"
           fi
