@@ -30,6 +30,7 @@ js: web/node_modules ## Bundle the interactive JavaScript (commit the result)
 	rm -rf static/js
 	cd web && npm run --silent build
 	cat web/node_modules/@ngrok/webernetes/LICENSE web/node_modules/@ngrok/webernetes/NOTICE > static/js/webernetes.LICENSE.txt
+	cp web/node_modules/js-yaml/LICENSE static/js/js-yaml.LICENSE.txt
 
 # Leaves old hashed chunks behind; run `make js` before committing.
 js-watch: web/node_modules ## Rebundle the JavaScript whenever web/src changes

@@ -175,7 +175,7 @@ function createTerminal() {
 			case "logs":
 				return await logs(positional, flags);
 			case "exec":
-				return await exec(positional);
+				return await exec(positional, flags);
 			case "describe":
 				err("error: describe is not implemented here. Try `kubectl get <resource> -o wide` instead.");
 				return;
@@ -347,7 +347,7 @@ function createTerminal() {
 		if (replicas === 0) muted("The blog is now down. Very cloud native of you. 🫠");
 	}
 
-	async function logs(positional) {
+	async function logs(positional, flags) {
 		const name = positional[0];
 		if (!name) {
 			err("error: expected 'logs POD_NAME'. Try `kubectl get pods` to find one.");
@@ -355,7 +355,7 @@ function createTerminal() {
 		}
 		const { c, m } = await cluster();
 		try {
-			await c.api.corev1.readNamespacedPod({ namespace: m.NAMESPACE, name });
+			await c.api.corev1.readNamespacedPod({ namespace: flags.namespace ?? m.NAMESPACE, name });
 		} catch {
 			err(`Error from server (NotFound): pods "${name}" not found`);
 			return;
@@ -363,7 +363,7 @@ function createTerminal() {
 		print((m.podLogs(name) ?? []).join("\n") || "(no logs yet)", "whitespace-pre-wrap break-words text-slate-400");
 	}
 
-	async function exec(positional) {
+	async function exec(positional, flags) {
 		const name = positional.find((p) => !p.startsWith("-"));
 		const dash = positional.indexOf("--");
 		const command = dash >= 0 ? positional.slice(dash + 1) : [];
@@ -377,7 +377,7 @@ function createTerminal() {
 		}
 		const { c, m } = await cluster();
 		try {
-			const result = await c.exec(m.NAMESPACE, name, undefined, command);
+			const result = await c.exec(flags.namespace ?? m.NAMESPACE, name, undefined, command);
 			if (result.stdout) print(result.stdout.trimEnd());
 			if (result.stderr) err(result.stderr.trimEnd());
 			if (result.exitCode !== 0) muted(`command terminated with exit code ${result.exitCode}`);

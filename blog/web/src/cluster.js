@@ -67,6 +67,49 @@ class BlogImage extends BaseImage {
 	}
 }
 
+// Extra images for the live manifests in posts. Anything else fails with
+// ErrImagePull, which is a lesson of its own.
+class NginxImage extends BaseImage {
+	static imageName = "nginx";
+	static imageVersion = "1.27";
+	defaultCommand = ["nginx"];
+
+	async exec(ctx, argv) {
+		if (argv[0] !== "nginx") {
+			return await super.exec(ctx, argv);
+		}
+		log(ctx, "nginx: ready for start up");
+		ctx.listenHttp(80, async (_requestCtx, request) => {
+			log(ctx, `"GET ${request.url.pathname} HTTP/1.1" 200`);
+			return { status: 200, body: `<h1>Welcome to nginx!</h1>\nServed by ${ctx.pod.name}\n` };
+		});
+		return await ctx.waitUntilKilled();
+	}
+}
+
+class BusyboxImage extends BaseImage {
+	static imageName = "busybox";
+	static imageVersion = "1.36";
+	defaultCommand = ["sh"];
+}
+
+// CrashLoopImage starts, complains and exits non-zero, forever.
+class CrashLoopImage extends BaseImage {
+	static imageName = "patricklaabs/crashloop";
+	static imageVersion = "1.0";
+	defaultCommand = ["run"];
+
+	async exec(ctx, argv) {
+		if (argv[0] !== "run") {
+			return await super.exec(ctx, argv);
+		}
+		log(ctx, "Starting up…");
+		await ctx.sleep(1000);
+		log(ctx, "panic: out of coffee ☕");
+		return 1;
+	}
+}
+
 function manifests(replicas) {
 	return [
 		{ apiVersion: "v1", kind: "Namespace", metadata: { name: NAMESPACE } },
@@ -114,7 +157,9 @@ let booting;
 export function bootCluster({ replicas = 3 } = {}) {
 	booting ??= (async () => {
 		const cluster = new Cluster();
-		cluster.registerImage(BlogImage);
+		for (const image of [BlogImage, NginxImage, BusyboxImage, CrashLoopImage]) {
+			cluster.registerImage(image);
+		}
 		await cluster.init();
 		await cluster.apply(manifests(replicas));
 		// Give the controllers a moment to create the pods, so the first
@@ -142,6 +187,8 @@ export async function scaleDeployment(cluster, replicas) {
 // podStatus mirrors the STATUS column of `kubectl get pods`.
 export function podStatus(pod) {
 	if (pod.metadata?.deletionTimestamp) return "Terminating";
+	const waiting = pod.status?.containerStatuses?.find((s) => s.state?.waiting?.reason && s.state.waiting.reason !== "ContainerCreating");
+	if (waiting) return waiting.state.waiting.reason;
 	const phase = pod.status?.phase;
 	if (!pod.spec?.nodeName || !phase) return "Pending";
 	if (phase === "Pending") return "ContainerCreating";
