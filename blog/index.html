@@ -118,5 +118,11 @@
             </p>
         </footer>
     </div>
+    {{if .Dev}}
+    <div hx-get="/dev/reload?v={{.Version}}" hx-trigger="every 1s" hx-swap="none" class="fixed bottom-4 right-4 flex items-center gap-2 rounded-full border border-amber-400/30 bg-cluster-900/90 px-3 py-1 font-mono text-xs text-amber-300 shadow-lg shadow-black/40">
+        <span class="h-2 w-2 rounded-full bg-amber-400"></span>
+        dev &middot; live reload
+    </div>
+    {{end}}
 </body>
 </html>
