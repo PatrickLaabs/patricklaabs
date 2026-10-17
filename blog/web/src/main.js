@@ -1,15 +1,14 @@
 // Entry point for the blog's interactive bits. The simulated cluster is
 // several hundred KB, so it is only loaded once a visitor asks for it.
-for (const root of document.querySelectorAll("[data-chaos]")) {
-	const start = root.querySelector("[data-chaos-start]");
-	start?.addEventListener(
-		"click",
-		async () => {
-			const { mountChaos } = await import("./chaos.js");
-			await mountChaos(root);
-		},
-		{ once: true },
-	);
+const widgets = [
+	["[data-chaos]", "[data-chaos-start]", async (root) => (await import("./chaos.js")).mountChaos(root)],
+	["[data-traffic]", "[data-traffic-start]", async (root) => (await import("./traffic.js")).mountTraffic(root)],
+];
+
+for (const [rootSelector, startSelector, mount] of widgets) {
+	for (const root of document.querySelectorAll(rootSelector)) {
+		root.querySelector(startSelector)?.addEventListener("click", () => mount(root), { once: true });
+	}
 }
 
 // The terminal opens with ` or ~ (like a game console) or the footer button.
