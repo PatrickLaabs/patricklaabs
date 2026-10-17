@@ -136,7 +136,7 @@ func loadPosts(fsys fs.FS) []Post {
 func contentVersion(fsys fs.FS) string {
 	var latest time.Time
 	var count int
-	for _, root := range []string{"index.html", "posts", "static/styles.css"} {
+	for _, root := range []string{"index.html", "posts", "static"} {
 		fs.WalkDir(fsys, root, func(_ string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return nil
