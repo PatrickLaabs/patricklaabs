@@ -11,3 +11,21 @@ for (const root of document.querySelectorAll("[data-chaos]")) {
 		{ once: true },
 	);
 }
+
+// The terminal opens with ` or ~ (like a game console) or the footer button.
+async function toggleTerminal() {
+	const terminal = await import("./terminal.js");
+	terminal.toggleTerminal();
+}
+
+document.addEventListener("keydown", (event) => {
+	if (event.key !== "`" && event.key !== "~") return;
+	const target = event.target;
+	if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target?.isContentEditable) return;
+	event.preventDefault();
+	toggleTerminal();
+});
+
+for (const button of document.querySelectorAll("[data-terminal-open]")) {
+	button.addEventListener("click", toggleTerminal);
+}

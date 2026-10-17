@@ -1,5 +1,5 @@
 // Chaos Monkey: kill the blog's pods and watch Kubernetes heal itself.
-import { bootCluster, killPod, NAMESPACE, podStatus, scaleDeployment } from "./cluster.js";
+import { bootCluster, DEPLOYMENT, killPod, NAMESPACE, podStatus, scaleDeployment } from "./cluster.js";
 
 const MAX_REPLICAS = 9;
 const MONKEY_INTERVAL_MS = 1200;
@@ -272,6 +272,17 @@ export async function mountChaos(root) {
 		if (!events.length) eventsList.append(el("li", "text-slate-600", "waiting for events…"));
 	}
 
+	// The terminal can scale too, so follow the deployment rather than
+	// trusting our own buttons.
+	cluster.informer(
+		"deployments",
+		(type, deployment) => {
+			if (type === "delete" || deployment.metadata.name !== DEPLOYMENT) return;
+			desired = deployment.spec?.replicas ?? desired;
+			scheduleRender();
+		},
+		{ namespace: NAMESPACE },
+	);
 	cluster.informer("nodes", (type, node) => {
 		if (type === "delete") nodes.delete(node.metadata.name);
 		else nodes.add(node.metadata.name);

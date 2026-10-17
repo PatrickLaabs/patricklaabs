@@ -131,7 +131,11 @@
         </main>
 
         <footer class="mt-16 border-t border-cluster-700 pt-6 font-mono text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2">
-            <p>&copy; 2026 Patrick Laabs</p>
+            <p>
+                &copy; 2026 Patrick Laabs
+                <span class="mx-1 text-slate-700">|</span>
+                <button type="button" data-terminal-open class="rounded border border-cluster-600 px-1.5 py-0.5 text-slate-400 transition hover:border-k8s hover:text-white" title="Open a terminal (or press ~)">&gt;_ <span class="sm:hidden">terminal</span><span class="hidden sm:inline">press <kbd class="text-cyan-400">~</kbd></span></button>
+            </p>
             <p class="text-center">
                 <span class="text-slate-600">context:</span> <span class="text-k8s-light">prod</span>
                 <span class="mx-1 text-slate-700">|</span>
