@@ -11,6 +11,12 @@ for (const [rootSelector, startSelector, mount] of widgets) {
 	}
 }
 
+// ```k8s-live blocks in posts become applyable manifests.
+const liveBlocks = document.querySelectorAll(".markdown-content code.language-k8s-live");
+if (liveBlocks.length) {
+	import("./live.js").then((live) => live.decorateLiveManifests(liveBlocks));
+}
+
 // The terminal opens with ` or ~ (like a game console) or the footer button.
 async function toggleTerminal() {
 	const terminal = await import("./terminal.js");
