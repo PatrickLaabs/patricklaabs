@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
@@ -13,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -153,6 +156,30 @@ func contentVersion(fsys fs.FS) string {
 	return fmt.Sprintf("%d-%d", latest.UnixNano(), count)
 }
 
+// assetVersion fingerprints everything under static/. The page appends it to
+// the URLs of files without a hash in their name (styles.css, htmx.min.js,
+// js/main.js), so browsers and CDNs never mix a new page with old scripts.
+func assetVersion(fsys fs.FS) string {
+	h := sha256.New()
+	fs.WalkDir(fsys, "static", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		data, err := fs.ReadFile(fsys, path)
+		if err != nil {
+			return nil
+		}
+		fmt.Fprintf(h, "%s\x00%d\x00", path, len(data))
+		h.Write(data)
+		return nil
+	})
+	return hex.EncodeToString(h.Sum(nil))[:12]
+}
+
+// hashedAsset matches bundler output like js/chaos-EYWIP36I.js, whose name
+// changes whenever its content does.
+var hashedAsset = regexp.MustCompile(`-[A-Z0-9]{8}\.js$`)
+
 func main() {
 	dev := flag.Bool("dev", false, "serve templates, posts and static files from disk and live-reload the browser on changes")
 	addr := flag.String("addr", ":8080", "address to listen on")
@@ -174,6 +201,7 @@ func main() {
 		log.Fatal(err)
 	}
 	posts := loadPosts(contentFS)
+	version := assetVersion(contentFS)
 
 	static, err := fs.Sub(contentFS, "static")
 	if err != nil {
@@ -188,6 +216,17 @@ func main() {
 			http.NotFound(w, r)
 			return
 		}
+		switch {
+		case *dev:
+			w.Header().Set("Cache-Control", "no-store")
+		case hashedAsset.MatchString(r.URL.Path):
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		default:
+			// Embedded files have no modification time, so give caches an
+			// ETag to revalidate against instead.
+			w.Header().Set("Cache-Control", "no-cache")
+			w.Header().Set("ETag", `"`+version+`"`)
+		}
 		fileServer.ServeHTTP(w, r)
 	})
 
@@ -198,7 +237,8 @@ func main() {
 		}
 
 		data := map[string]interface{}{
-			"Posts": posts,
+			"Posts":        posts,
+			"AssetVersion": version,
 		}
 		t := tmpl
 		if *dev {
@@ -211,6 +251,7 @@ func main() {
 			data["Posts"] = loadPosts(contentFS)
 			data["Dev"] = true
 			data["Version"] = contentVersion(contentFS)
+			data["AssetVersion"] = assetVersion(contentFS)
 		}
 
 		var buf bytes.Buffer
@@ -220,6 +261,7 @@ func main() {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-cache")
 		buf.WriteTo(w)
 	})
 
