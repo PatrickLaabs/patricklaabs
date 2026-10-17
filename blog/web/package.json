@@ -1,0 +1,13 @@
+{
+  "name": "blog-web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/main.js --bundle --splitting --format=esm --minify --target=es2022 --outdir=../static/js --entry-names=[name] --chunk-names=[name]-[hash]",
+    "watch": "npm run build -- --watch=forever"
+  },
+  "devDependencies": {
+    "@ngrok/webernetes": "0.6.1",
+    "esbuild": "0.28.2"
+  }
+}

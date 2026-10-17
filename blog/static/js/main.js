@@ -1,0 +1,1 @@
+for(let t of document.querySelectorAll("[data-chaos]"))t.querySelector("[data-chaos-start]")?.addEventListener("click",async()=>{let{mountChaos:a}=await import("./chaos-SXNL27HD.js");await a(t)},{once:!0});
