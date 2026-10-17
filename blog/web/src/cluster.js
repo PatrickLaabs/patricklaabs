@@ -6,6 +6,23 @@ export const NAMESPACE = "blog";
 export const DEPLOYMENT = "blog";
 export const SERVICE_URL = "http://node-1:30080";
 
+// Container stdout, keyed by pod name. webernetes has no log API, so the
+// image records what it writes here for `kubectl logs`.
+const logs = new Map();
+const MAX_LOG_LINES = 200;
+
+function log(ctx, line) {
+	ctx.writeStdout(`${line}\n`);
+	const lines = logs.get(ctx.pod.name) ?? [];
+	lines.push(`${new Date().toISOString()} ${line}`);
+	if (lines.length > MAX_LOG_LINES) lines.shift();
+	logs.set(ctx.pod.name, lines);
+}
+
+export function podLogs(name) {
+	return logs.get(name);
+}
+
 // BlogImage is the container image the blog's pods run. It answers HTTP on
 // port 8080, takes a moment to become ready and drains gracefully on SIGTERM,
 // so the pod lifecycle is slow enough to watch.
@@ -20,10 +37,10 @@ class BlogImage extends BaseImage {
 		}
 
 		let ready = false;
-		ctx.writeStdout(`Server listening on :8080\n`);
+		log(ctx, "Server listening on :8080");
 		ctx.setTimeout(() => {
 			ready = true;
-			ctx.writeStdout(`Posts loaded, ready to serve traffic\n`);
+			log(ctx, "Posts loaded, ready to serve traffic");
 		}, 1500);
 
 		ctx.listenHttp(8080, async (_requestCtx, request) => {
@@ -33,6 +50,7 @@ class BlogImage extends BaseImage {
 				case "/readyz":
 					return ready ? { status: 200, body: "ok\n" } : { status: 503, body: "not ready\n" };
 				default:
+					log(ctx, `GET ${request.url.pathname} 200`);
 					return { status: 200, body: `Hello from ${ctx.pod.name}\n` };
 			}
 		});
@@ -42,7 +60,7 @@ class BlogImage extends BaseImage {
 
 	async signalHandler(ctx, signal) {
 		if (signal === "SIGTERM") {
-			ctx.writeStdout("Shutting down\n");
+			log(ctx, "SIGTERM received, draining connections");
 			await ctx.sleep(1500);
 			ctx.exit(0);
 		}
@@ -99,6 +117,13 @@ export function bootCluster({ replicas = 3 } = {}) {
 		cluster.registerImage(BlogImage);
 		await cluster.init();
 		await cluster.apply(manifests(replicas));
+		// Give the controllers a moment to create the pods, so the first
+		// `kubectl get pods` does not come back empty.
+		for (let i = 0; i < 60; i++) {
+			const pods = await cluster.api.corev1.listNamespacedPod({ namespace: NAMESPACE });
+			if (pods.items.length >= replicas) break;
+			await new Promise((resolve) => setTimeout(resolve, 50));
+		}
 		return cluster;
 	})();
 	return booting;
@@ -125,4 +150,15 @@ export function podStatus(pod) {
 		return ready ? "Running" : "Starting";
 	}
 	return phase;
+}
+
+// age formats a timestamp like the AGE column of kubectl.
+export function age(timestamp) {
+	if (!timestamp) return "<unknown>";
+	const seconds = Math.max(0, Math.floor((Date.now() - new Date(timestamp).getTime()) / 1000));
+	if (seconds < 120) return `${seconds}s`;
+	const minutes = Math.floor(seconds / 60);
+	if (minutes < 10) return `${minutes}m${seconds % 60}s`;
+	if (minutes < 180) return `${minutes}m`;
+	return `${Math.floor(minutes / 60)}h`;
 }
