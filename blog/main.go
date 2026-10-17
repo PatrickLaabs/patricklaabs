@@ -5,11 +5,13 @@ import (
 	"context"
 	"embed"
 	"errors"
+	"flag"
 	"fmt"
 	"html/template"
 	"io/fs"
 	"log"
 	"net/http"
+	"os"
 	"os/signal"
 	"strings"
 	"sync/atomic"
@@ -30,6 +32,22 @@ var postsFS embed.FS
 
 //go:embed static
 var staticFS embed.FS
+
+// embedFS combines the embedded files into one tree laid out like the
+// source directory, so production and dev mode share the same code paths.
+type embedFS struct{}
+
+func (embedFS) Open(name string) (fs.File, error) {
+	switch {
+	case name == "index.html":
+		return indexHTML.Open(name)
+	case name == "posts" || strings.HasPrefix(name, "posts/"):
+		return postsFS.Open(name)
+	case name == "static" || strings.HasPrefix(name, "static/"):
+		return staticFS.Open(name)
+	}
+	return nil, &fs.PathError{Op: "open", Path: name, Err: fs.ErrNotExist}
+}
 
 // ready reports whether the server should receive traffic. It flips to false
 // on SIGTERM so Kubernetes stops routing requests before we shut down.
@@ -71,53 +89,93 @@ type Post struct {
 	Content template.HTML
 }
 
-func main() {
-	// Parse the template
-	tmpl, err := template.ParseFS(indexHTML, "index.html")
-	if err != nil {
-		log.Fatal(err)
-	}
+var md = goldmark.New(
+	goldmark.WithExtensions(extension.GFM),
+	goldmark.WithParserOptions(
+		parser.WithAutoHeadingID(),
+	),
+	goldmark.WithRendererOptions(
+		html.WithHardWraps(),
+	),
+)
 
-	// Read and parse markdown files
+// loadPosts reads and renders every Markdown file in the posts directory of fsys.
+func loadPosts(fsys fs.FS) []Post {
 	var posts []Post
-	entries, err := postsFS.ReadDir("posts")
+	entries, err := fs.ReadDir(fsys, "posts")
 	if err != nil {
 		// Log error but do not fatal in case there are no posts or directory is missing
 		log.Println("Could not read posts directory:", err)
-	} else {
-		md := goldmark.New(
-			goldmark.WithExtensions(extension.GFM),
-			goldmark.WithParserOptions(
-				parser.WithAutoHeadingID(),
-			),
-			goldmark.WithRendererOptions(
-				html.WithHardWraps(),
-			),
-		)
-
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
-			}
-			data, err := postsFS.ReadFile("posts/" + entry.Name())
-			if err != nil {
-				log.Println("Error reading post:", err)
-				continue
-			}
-
-			var buf bytes.Buffer
-			if err := md.Convert(data, &buf); err != nil {
-				log.Println("Error converting post:", err)
-				continue
-			}
-			posts = append(posts, Post{
-				Name:    entry.Name(),
-				Content: template.HTML(buf.String()),
-			})
+		return nil
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
+			continue
 		}
+		data, err := fs.ReadFile(fsys, "posts/"+entry.Name())
+		if err != nil {
+			log.Println("Error reading post:", err)
+			continue
+		}
+
+		var buf bytes.Buffer
+		if err := md.Convert(data, &buf); err != nil {
+			log.Println("Error converting post:", err)
+			continue
+		}
+		posts = append(posts, Post{
+			Name:    entry.Name(),
+			Content: template.HTML(buf.String()),
+		})
+	}
+	return posts
+}
+
+// contentVersion fingerprints the files a dev-mode page depends on, so the
+// browser can tell when it needs to reload.
+func contentVersion(fsys fs.FS) string {
+	var latest time.Time
+	var count int
+	for _, root := range []string{"index.html", "posts", "static/styles.css"} {
+		fs.WalkDir(fsys, root, func(_ string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return nil
+			}
+			if info, err := d.Info(); err == nil {
+				count++
+				if info.ModTime().After(latest) {
+					latest = info.ModTime()
+				}
+			}
+			return nil
+		})
+	}
+	return fmt.Sprintf("%d-%d", latest.UnixNano(), count)
+}
+
+func main() {
+	dev := flag.Bool("dev", false, "serve templates, posts and static files from disk and live-reload the browser on changes")
+	addr := flag.String("addr", ":8080", "address to listen on")
+	flag.Parse()
+
+	// In dev mode everything is read from the working directory on every
+	// request; otherwise the embedded copies are loaded once at startup.
+	var contentFS fs.FS = embedFS{}
+	if *dev {
+		contentFS = os.DirFS(".")
 	}
 
-	static, err := fs.Sub(staticFS, "static")
+	loadTemplate := func() (*template.Template, error) {
+		return template.ParseFS(contentFS, "index.html")
+	}
+
+	tmpl, err := loadTemplate()
+	if err != nil {
+		log.Fatal(err)
+	}
+	posts := loadPosts(contentFS)
+
+	static, err := fs.Sub(contentFS, "static")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -139,10 +197,24 @@ func main() {
 			return
 		}
 
-		var buf bytes.Buffer
-		if err := tmpl.Execute(&buf, map[string]interface{}{
+		data := map[string]interface{}{
 			"Posts": posts,
-		}); err != nil {
+		}
+		t := tmpl
+		if *dev {
+			var err error
+			if t, err = loadTemplate(); err != nil {
+				log.Println("Error parsing template:", err)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			data["Posts"] = loadPosts(contentFS)
+			data["Dev"] = true
+			data["Version"] = contentVersion(contentFS)
+		}
+
+		var buf bytes.Buffer
+		if err := t.Execute(&buf, data); err != nil {
 			log.Println("Error rendering template:", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			return
@@ -161,8 +233,19 @@ func main() {
 		fmt.Fprint(w, `<div class="rounded-lg border border-emerald-500/30 bg-cluster-950 p-4 font-mono text-sm"><p class="text-emerald-300">deployment.apps/blog configured</p><p class="mt-1 text-slate-500"># Loaded dynamically via HTMX &mdash; no full page reload.</p></div>`)
 	})
 
+	if *dev {
+		// Polled by the page via HTMX; tells it to reload once files change.
+		mux.HandleFunc("/dev/reload", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Cache-Control", "no-store")
+			if r.URL.Query().Get("v") != contentVersion(contentFS) {
+				w.Header().Set("HX-Refresh", "true")
+			}
+			w.WriteHeader(http.StatusNoContent)
+		})
+	}
+
 	srv := &http.Server{
-		Addr:              ":8080",
+		Addr:              *addr,
 		Handler:           securityHeaders(mux),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
@@ -178,7 +261,11 @@ func main() {
 	go func() { errCh <- srv.ListenAndServe() }()
 
 	ready.Store(true)
-	fmt.Println("Server listening on :8080")
+	if *dev {
+		fmt.Printf("Dev server listening on http://localhost%s (live reload enabled)\n", *addr)
+	} else {
+		fmt.Println("Server listening on", *addr)
+	}
 
 	select {
 	case err := <-errCh:
@@ -190,7 +277,9 @@ func main() {
 	// this pod from the Service before closing the listener.
 	log.Println("Shutting down")
 	ready.Store(false)
-	time.Sleep(5 * time.Second)
+	if !*dev {
+		time.Sleep(5 * time.Second)
+	}
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
