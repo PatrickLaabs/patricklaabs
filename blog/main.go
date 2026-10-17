@@ -158,7 +158,7 @@ func main() {
 
 	mux.HandleFunc("/clicked", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprint(w, `<div class="bg-green-50 text-green-800 p-4 rounded-md border border-green-200 font-medium">Thanks for clicking! This content was loaded dynamically via HTMX without a full page reload.</div>`)
+		fmt.Fprint(w, `<div class="rounded-lg border border-emerald-500/30 bg-cluster-950 p-4 font-mono text-sm"><p class="text-emerald-300">deployment.apps/blog configured</p><p class="mt-1 text-slate-500"># Loaded dynamically via HTMX &mdash; no full page reload.</p></div>`)
 	})
 
 	srv := &http.Server{

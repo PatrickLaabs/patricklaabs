@@ -3,48 +3,119 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Patrick's Blog</title>
+    <title>Patrick's Blog · Kubernetes &amp; Cloud Native</title>
+    <meta name="description" content="Notes on Kubernetes, cloud-native infrastructure, Go and platform engineering.">
+    <meta name="theme-color" content="#070b14">
     <meta name="htmx-config" content='{"includeIndicatorStyles":false}'>
     <link rel="stylesheet" href="/static/styles.css">
     <script src="/static/htmx.min.js"></script>
 </head>
-<body class="bg-gray-50 text-gray-800 font-sans leading-relaxed">
-    <div class="max-w-3xl mx-auto px-4 py-8">
-        <header class="text-center mb-12 border-b border-gray-200 pb-8">
-            <h1 class="text-5xl font-extrabold text-gray-900 tracking-tight mb-2">Patrick's Blog</h1>
-            <p class="text-xl text-gray-600 font-light">Go Developer, Cloud-Native Enthusiast</p>
+<body class="bg-grid text-slate-300 font-sans leading-relaxed antialiased min-h-screen selection:bg-k8s selection:text-white">
+    <div class="max-w-3xl mx-auto px-4 py-8 sm:py-12">
+        <nav class="flex items-center justify-between mb-12 font-mono text-sm">
+            <a href="/" class="flex items-center gap-3 text-slate-100 hover:text-white">
+                <svg class="w-9 h-9 text-k8s" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+                    <path d="M16 2 27.5 7.6l2.8 12.4-7.9 10H9.6l-7.9-10L4.5 7.6Z" fill="currentColor"/>
+                    <circle cx="16" cy="16" r="5" stroke="#fff" stroke-width="2"/>
+                    <path d="M16 7v4M16 21v4M8 12l3.6 2M20.4 18 24 20M24 12l-3.6 2M11.6 18 8 20" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+                <span class="font-semibold tracking-tight">patrick<span class="text-k8s-light">.laabs</span></span>
+            </a>
+            <span class="flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-300">
+                <span class="status-dot h-2 w-2 rounded-full bg-emerald-400"></span>
+                Running
+            </span>
+        </nav>
+
+        <header class="mb-12">
+            <p class="font-mono text-sm text-cyan-400 mb-4">
+                <span class="text-emerald-400">patrick@cluster</span><span class="text-slate-500">:</span><span class="text-k8s-light">~</span><span class="text-slate-500">$</span>
+                <span class="text-slate-300 cursor">kubectl get posts -n blog</span>
+            </p>
+            <h1 class="text-4xl sm:text-5xl font-extrabold text-white tracking-tight mb-4">
+                Kubernetes, Cloud Native<br class="hidden sm:block">
+                <span class="bg-gradient-to-r from-k8s-light via-sky-400 to-cyan-300 bg-clip-text text-transparent">&amp; everything in between.</span>
+            </h1>
+            <p class="text-lg text-slate-400 max-w-2xl">
+                Notes from a Go developer on running workloads in production &mdash; clusters, operators, GitOps, observability and platform engineering.
+            </p>
+            <ul class="mt-6 flex flex-wrap gap-2 font-mono text-xs">
+                <li class="rounded-md border border-k8s/40 bg-k8s/10 px-2.5 py-1 text-k8s-light">#kubernetes</li>
+                <li class="rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2.5 py-1 text-cyan-300">#cloud-native</li>
+                <li class="rounded-md border border-sky-500/30 bg-sky-500/10 px-2.5 py-1 text-sky-300">#golang</li>
+                <li class="rounded-md border border-violet-500/30 bg-violet-500/10 px-2.5 py-1 text-violet-300">#gitops</li>
+                <li class="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-emerald-300">#platform-engineering</li>
+            </ul>
         </header>
 
         <main>
-            <section class="bg-white rounded-xl shadow-sm border border-gray-100 p-8 mb-8 transition hover:shadow-md">
-                <h2 class="text-2xl font-bold text-gray-900 mb-4">Welcome to my personal blog</h2>
-                <p class="text-gray-700 mb-6">This blog is built using Go, HTMX, and Ko.</p>
+            <section class="rounded-xl border border-cluster-700 bg-cluster-900/80 backdrop-blur mb-10 overflow-hidden shadow-lg shadow-black/30">
+                <div class="flex items-center gap-2 border-b border-cluster-700 bg-cluster-800/80 px-4 py-2.5 font-mono text-xs text-slate-500">
+                    <span class="h-3 w-3 rounded-full bg-rose-500/70"></span>
+                    <span class="h-3 w-3 rounded-full bg-amber-400/70"></span>
+                    <span class="h-3 w-3 rounded-full bg-emerald-500/70"></span>
+                    <span class="ml-2">deployment.yaml</span>
+                </div>
+                <div class="p-6 sm:p-8">
+                    <h2 class="text-2xl font-bold text-white mb-3">Welcome to my personal blog</h2>
+                    <p class="text-slate-400 mb-6">
+                        This blog eats its own dog food: written in <span class="text-sky-300 font-medium">Go</span>, enhanced with <span class="text-sky-300 font-medium">HTMX</span>, built into a distroless image with <span class="text-sky-300 font-medium">ko</span> and running on <span class="text-k8s-light font-medium">Kubernetes</span>.
+                    </p>
 
-                <div id="htmx-demo" class="bg-blue-50 rounded-lg p-6 border border-blue-100">
-                    <p class="text-blue-900 mb-4 font-medium">Click the button below to test HTMX integration:</p>
-                    <button
-                        hx-get="/clicked"
-                        hx-swap="outerHTML"
-                        class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-md shadow-sm transition duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                    >
-                        Click Me
-                    </button>
+                    <pre class="mb-6 overflow-x-auto rounded-lg border border-cluster-700 bg-cluster-950 p-4 font-mono text-xs sm:text-sm leading-6"><code><span class="text-sky-400">apiVersion</span><span class="text-slate-500">:</span> <span class="text-amber-200">apps/v1</span>
+<span class="text-sky-400">kind</span><span class="text-slate-500">:</span> <span class="text-amber-200">Deployment</span>
+<span class="text-sky-400">metadata</span><span class="text-slate-500">:</span>
+  <span class="text-sky-400">name</span><span class="text-slate-500">:</span> <span class="text-amber-200">blog</span>
+<span class="text-sky-400">spec</span><span class="text-slate-500">:</span>
+  <span class="text-sky-400">replicas</span><span class="text-slate-500">:</span> <span class="text-violet-300">3</span>
+  <span class="text-slate-500"># probes: /healthz &amp; /readyz</span></code></pre>
+
+                    <div id="htmx-demo">
+                        <button
+                            hx-get="/clicked"
+                            hx-swap="outerHTML"
+                            class="group inline-flex items-center gap-2 whitespace-nowrap rounded-md bg-k8s px-4 sm:px-5 py-2.5 font-mono text-xs sm:text-sm font-semibold text-white shadow-lg shadow-k8s/30 transition duration-150 ease-in-out hover:bg-k8s-light focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-cluster-900"
+                        >
+                            <span class="text-cyan-200">$</span> kubectl apply -f deployment.yaml
+                            <span class="transition-transform group-hover:translate-x-0.5" aria-hidden="true">&rarr;</span>
+                        </button>
+                    </div>
                 </div>
             </section>
 
             {{if .Posts}}
+            <div class="flex items-center justify-between mb-4 font-mono text-xs uppercase tracking-wider text-slate-500">
+                <span>Latest posts</span>
+                <span>{{len .Posts}} {{if eq (len .Posts) 1}}resource{{else}}resources{{end}}</span>
+            </div>
             <div class="space-y-8">
                 {{range .Posts}}
-                <article class="bg-white rounded-xl shadow-sm border border-gray-100 p-8 transition hover:shadow-md markdown-content">
-                    {{.Content}}
+                <article class="group rounded-xl border border-cluster-700 bg-cluster-900/80 backdrop-blur overflow-hidden shadow-lg shadow-black/30 transition hover:border-k8s/60 hover:shadow-k8s/10">
+                    <div class="flex items-center justify-between border-b border-cluster-700 bg-cluster-800/80 px-4 py-2.5 font-mono text-xs">
+                        <span class="text-slate-500">post/<span class="text-slate-300">{{.Name}}</span></span>
+                        <span class="flex items-center gap-1.5 text-emerald-300">
+                            <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+                            Published
+                        </span>
+                    </div>
+                    <div class="p-6 sm:p-8 markdown-content">
+                        {{.Content}}
+                    </div>
                 </article>
                 {{end}}
             </div>
             {{end}}
         </main>
 
-        <footer class="text-center mt-12 text-gray-500 text-sm">
+        <footer class="mt-16 border-t border-cluster-700 pt-6 font-mono text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2">
             <p>&copy; 2026 Patrick Laabs</p>
+            <p class="text-center">
+                <span class="text-slate-600">context:</span> <span class="text-k8s-light">prod</span>
+                <span class="mx-1 text-slate-700">|</span>
+                <span class="text-slate-600">namespace:</span> <span class="text-cyan-400">blog</span>
+                <span class="mx-1 text-slate-700">|</span>
+                <span class="text-slate-600">built with</span> Go · HTMX · ko
+            </p>
         </footer>
     </div>
 </body>
