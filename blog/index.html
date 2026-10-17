@@ -106,6 +106,25 @@
                 </div>
             </section>
 
+            <section id="traffic" data-traffic class="scroll-mt-8 rounded-xl border border-cluster-700 bg-cluster-900/80 backdrop-blur mb-10 overflow-hidden shadow-lg shadow-black/30">
+                <div class="flex items-center gap-2 border-b border-cluster-700 bg-cluster-800/80 px-4 py-2.5 font-mono text-xs text-slate-500">
+                    <span class="h-3 w-3 rounded-full bg-rose-500/70"></span>
+                    <span class="h-3 w-3 rounded-full bg-amber-400/70"></span>
+                    <span class="h-3 w-3 rounded-full bg-emerald-500/70"></span>
+                    <span class="ml-2 truncate">while true; do curl blog; done</span>
+                    <span data-traffic-summary class="ml-auto shrink-0">idle</span>
+                </div>
+                <div class="p-6 sm:p-8" data-traffic-body>
+                    <h2 class="text-2xl font-bold text-white mb-3">📡 Load Balancing</h2>
+                    <p class="text-slate-400 mb-6">
+                        Fire HTTP requests at the blog's Service and watch them fly to the pods round-robin. Then go kill some pods and see whether a single request fails.
+                    </p>
+                    <button type="button" data-traffic-start class="inline-flex items-center gap-2 whitespace-nowrap rounded-md bg-k8s px-4 sm:px-5 py-2.5 font-mono text-xs sm:text-sm font-semibold text-white shadow-lg shadow-k8s/30 transition hover:bg-k8s-light focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-cluster-900 disabled:cursor-wait disabled:opacity-70">
+                        &#9654; Send some traffic
+                    </button>
+                </div>
+            </section>
+
             {{if .Posts}}
             <div class="flex items-center justify-between mb-4 font-mono text-xs uppercase tracking-wider text-slate-500">
                 <span>Latest posts</span>
