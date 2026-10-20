@@ -110,6 +110,71 @@ class CrashLoopImage extends BaseImage {
 	}
 }
 
+// SlowStartImage needs a while to warm its cache before it can serve real
+// requests, like a JVM app or anything that loads a lot of data on boot. It
+// listens right away but answers 503 until the warm-up is done.
+class SlowStartImage extends BaseImage {
+	static imageName = "patricklaabs/slowstart";
+	static imageVersion = "1.0";
+	defaultCommand = ["server"];
+
+	async exec(ctx, argv) {
+		if (argv[0] !== "server") {
+			return await super.exec(ctx, argv);
+		}
+
+		let ready = false;
+		log(ctx, "Server listening on :8080, warming up cache…");
+		ctx.setTimeout(() => {
+			ready = true;
+			log(ctx, "Cache warm, ready to serve traffic");
+		}, 8000);
+
+		ctx.listenHttp(8080, async (_requestCtx, request) => {
+			if (!ready) {
+				log(ctx, `GET ${request.url.pathname} 503`);
+				return { status: 503, body: "503 Service Unavailable: still warming up\n" };
+			}
+			if (request.url.pathname !== "/healthz" && request.url.pathname !== "/readyz") log(ctx, `GET ${request.url.pathname} 200`);
+			return { status: 200, body: request.url.pathname === "/" ? `Hello from ${ctx.pod.name}\n` : "ok\n" };
+		});
+
+		return await ctx.waitUntilKilled();
+	}
+}
+
+// DeadlockImage serves happily for a while, then two goroutines grab the same
+// locks in the wrong order and it never answers properly again. The process
+// keeps running, so only a liveness probe notices.
+class DeadlockImage extends BaseImage {
+	static imageName = "patricklaabs/deadlock";
+	static imageVersion = "1.0";
+	defaultCommand = ["server"];
+
+	async exec(ctx, argv) {
+		if (argv[0] !== "server") {
+			return await super.exec(ctx, argv);
+		}
+
+		let stuck = false;
+		log(ctx, "Server listening on :8080");
+		ctx.setTimeout(() => {
+			stuck = true;
+			log(ctx, "worker pool stuck: waiting for a lock that is never released");
+		}, 15000);
+
+		ctx.listenHttp(8080, async (_requestCtx, request) => {
+			if (stuck) {
+				return { status: 500, body: "500 Internal Server Error: request timed out waiting for lock\n" };
+			}
+			if (request.url.pathname !== "/healthz") log(ctx, `GET ${request.url.pathname} 200`);
+			return { status: 200, body: request.url.pathname === "/" ? `Hello from ${ctx.pod.name}\n` : "ok\n" };
+		});
+
+		return await ctx.waitUntilKilled();
+	}
+}
+
 function manifests(replicas) {
 	return [
 		{ apiVersion: "v1", kind: "Namespace", metadata: { name: NAMESPACE } },
@@ -157,7 +222,7 @@ let booting;
 export function bootCluster({ replicas = 3 } = {}) {
 	booting ??= (async () => {
 		const cluster = new Cluster();
-		for (const image of [BlogImage, NginxImage, BusyboxImage, CrashLoopImage]) {
+		for (const image of [BlogImage, NginxImage, BusyboxImage, CrashLoopImage, SlowStartImage, DeadlockImage]) {
 			cluster.registerImage(image);
 		}
 		await cluster.init();
