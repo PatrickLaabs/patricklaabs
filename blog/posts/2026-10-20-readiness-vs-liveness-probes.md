@@ -5,7 +5,7 @@ Kubernetes knows whether your container is *running*. It has no idea whether you
 * **Readiness:** "Should this pod get traffic right now?" If not, it is taken out of the Service, but nothing gets restarted.
 * **Liveness:** "Is this container broken beyond repair?" If so, the kubelet kills it and starts a fresh one.
 
-Mixing them up is one of the classic ways to take down a perfectly healthy app. As in the [last post](#kubernetes-live-in-your-browser), every manifest below runs on a simulated cluster in your browser: hit **▶ kubectl apply**, edit, apply again.
+Mixing them up is one of the classic ways to take down a perfectly healthy app. As in the [last post](/posts/kubernetes-live-in-your-browser), every manifest below runs on a simulated cluster in your browser: hit **▶ kubectl apply**, edit, apply again.
 
 ## No readiness probe: traffic too early
 
@@ -90,7 +90,7 @@ spec:
       targetPort: 8080
 ```
 
-"No endpoints" sounds worse than a `503`, but with more than one replica it means traffic goes to the pods that *are* ready. That is exactly what keeps the [Chaos Monkey](#chaos) on the front page from causing errors: this blog flips its own readiness to `503` when it receives `SIGTERM`, so the Service stops sending it requests before it shuts down.
+"No endpoints" sounds worse than a `503`, but with more than one replica it means traffic goes to the pods that *are* ready. That is exactly what keeps the [Chaos Monkey](/#chaos) on the front page from causing errors: this blog flips its own readiness to `503` when it receives `SIGTERM`, so the Service stops sending it requests before it shuts down.
 
 ## Liveness: when the process lives but the app is dead
 

@@ -16,15 +16,18 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"sort"
 	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer/html"
+	"github.com/yuin/goldmark/text"
 )
 
 //go:embed index.html
@@ -88,8 +91,18 @@ func securityHeaders(next http.Handler) http.Handler {
 }
 
 type Post struct {
-	Name    string
+	Slug    string
+	Title   string
+	Summary string
+	Date    time.Time
 	Content template.HTML
+}
+
+// YearGroup is a slice of posts published in the same year, for the archive
+// on the front page.
+type YearGroup struct {
+	Year  int
+	Posts []Post
 }
 
 var md = goldmark.New(
@@ -102,7 +115,11 @@ var md = goldmark.New(
 	),
 )
 
-// loadPosts reads and renders every Markdown file in the posts directory of fsys.
+// postFilename matches posts/YYYY-MM-DD-slug.md; the date is the publish date.
+var postFilename = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2})-([a-z0-9-]+)\.md$`)
+
+// loadPosts reads and renders every Markdown file in the posts directory of
+// fsys, newest first.
 func loadPosts(fsys fs.FS) []Post {
 	var posts []Post
 	entries, err := fs.ReadDir(fsys, "posts")
@@ -111,27 +128,126 @@ func loadPosts(fsys fs.FS) []Post {
 		log.Println("Could not read posts directory:", err)
 		return nil
 	}
+	seen := map[string]bool{}
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
 			continue
 		}
+		m := postFilename.FindStringSubmatch(entry.Name())
+		if m == nil {
+			log.Printf("Skipping post %s: name must look like YYYY-MM-DD-slug.md", entry.Name())
+			continue
+		}
+		date, err := time.Parse(time.DateOnly, m[1])
+		if err != nil {
+			log.Printf("Skipping post %s: %v", entry.Name(), err)
+			continue
+		}
+		slug := m[2]
+		if seen[slug] {
+			log.Printf("Skipping post %s: slug %q is already taken", entry.Name(), slug)
+			continue
+		}
+		seen[slug] = true
+
 		data, err := fs.ReadFile(fsys, "posts/"+entry.Name())
 		if err != nil {
 			log.Println("Error reading post:", err)
 			continue
 		}
 
+		doc := md.Parser().Parse(text.NewReader(data))
+		title, summary := postInfo(doc, data)
+		if title == "" {
+			title = slug
+		}
 		var buf bytes.Buffer
-		if err := md.Convert(data, &buf); err != nil {
+		if err := md.Renderer().Render(&buf, data, doc); err != nil {
 			log.Println("Error converting post:", err)
 			continue
 		}
 		posts = append(posts, Post{
-			Name:    entry.Name(),
+			Slug:    slug,
+			Title:   title,
+			Summary: summary,
+			Date:    date,
 			Content: template.HTML(buf.String()),
 		})
 	}
+	sort.SliceStable(posts, func(i, j int) bool {
+		if !posts[i].Date.Equal(posts[j].Date) {
+			return posts[i].Date.After(posts[j].Date)
+		}
+		return posts[i].Slug < posts[j].Slug
+	})
 	return posts
+}
+
+// postInfo returns the text of a post's first top-level heading and of the
+// first paragraph after it, shortened for the post list.
+func postInfo(doc ast.Node, source []byte) (title, summary string) {
+	for n := doc.FirstChild(); n != nil; n = n.NextSibling() {
+		switch n := n.(type) {
+		case *ast.Heading:
+			if title == "" && n.Level == 1 {
+				title = plainText(n, source)
+			}
+		case *ast.Paragraph:
+			if summary == "" {
+				summary = truncate(plainText(n, source), 220)
+			}
+		}
+		if title != "" && summary != "" {
+			break
+		}
+	}
+	return title, summary
+}
+
+// plainText concatenates the text inside n without any Markdown markup.
+func plainText(n ast.Node, source []byte) string {
+	var b strings.Builder
+	ast.Walk(n, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		switch n := n.(type) {
+		case *ast.Text:
+			b.Write(n.Segment.Value(source))
+			if n.SoftLineBreak() || n.HardLineBreak() {
+				b.WriteByte(' ')
+			}
+		case *ast.String:
+			b.Write(n.Value)
+		}
+		return ast.WalkContinue, nil
+	})
+	return strings.Join(strings.Fields(b.String()), " ")
+}
+
+// truncate shortens s to at most max bytes, cutting at a word boundary.
+func truncate(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	s = s[:max]
+	if i := strings.LastIndexByte(s, ' '); i > 0 {
+		s = s[:i]
+	}
+	return strings.TrimRight(s, " ,.;:-") + "…"
+}
+
+// groupByYear splits posts, which are sorted newest first, by publish year.
+func groupByYear(posts []Post) []YearGroup {
+	var groups []YearGroup
+	for _, p := range posts {
+		if len(groups) == 0 || groups[len(groups)-1].Year != p.Date.Year() {
+			groups = append(groups, YearGroup{Year: p.Date.Year()})
+		}
+		g := &groups[len(groups)-1]
+		g.Posts = append(g.Posts, p)
+	}
+	return groups
 }
 
 // contentVersion fingerprints the files a dev-mode page depends on, so the
@@ -230,30 +346,15 @@ func main() {
 		fileServer.ServeHTTP(w, r)
 	})
 
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
-			http.NotFound(w, r)
-			return
-		}
-
-		data := map[string]interface{}{
-			"Posts":        posts,
-			"AssetVersion": version,
-		}
-		t := tmpl
+	// render executes the page template with data. In dev mode the template
+	// and posts are reloaded from disk first, so data may be built from them.
+	render := func(w http.ResponseWriter, t *template.Template, data map[string]any) {
+		data["AssetVersion"] = version
 		if *dev {
-			var err error
-			if t, err = loadTemplate(); err != nil {
-				log.Println("Error parsing template:", err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			data["Posts"] = loadPosts(contentFS)
 			data["Dev"] = true
 			data["Version"] = contentVersion(contentFS)
 			data["AssetVersion"] = assetVersion(contentFS)
 		}
-
 		var buf bytes.Buffer
 		if err := t.Execute(&buf, data); err != nil {
 			log.Println("Error rendering template:", err)
@@ -263,6 +364,50 @@ func main() {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-cache")
 		buf.WriteTo(w)
+	}
+
+	// current returns the template and posts to serve: the ones loaded at
+	// startup, or fresh copies from disk in dev mode.
+	current := func(w http.ResponseWriter) (*template.Template, []Post, bool) {
+		if !*dev {
+			return tmpl, posts, true
+		}
+		t, err := loadTemplate()
+		if err != nil {
+			log.Println("Error parsing template:", err)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return nil, nil, false
+		}
+		return t, loadPosts(contentFS), true
+	}
+
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		t, posts, ok := current(w)
+		if !ok {
+			return
+		}
+		render(w, t, map[string]any{
+			"Posts": posts,
+			"Years": groupByYear(posts),
+		})
+	})
+
+	mux.HandleFunc("GET /posts/{slug}", func(w http.ResponseWriter, r *http.Request) {
+		t, posts, ok := current(w)
+		if !ok {
+			return
+		}
+		for _, p := range posts {
+			if p.Slug == r.PathValue("slug") {
+				render(w, t, map[string]any{"Post": p})
+				return
+			}
+		}
+		http.NotFound(w, r)
 	})
 
 	// Liveness: the process is up and able to serve requests.
