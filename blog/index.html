@@ -6,6 +6,9 @@
     {{if .Post}}
     <title>{{.Post.Title}} · Patrick's Blog</title>
     <meta name="description" content="{{.Post.Summary}}">
+    {{else if .Page}}
+    <title>{{.Page.Title}} · Patrick's Blog</title>
+    <meta name="description" content="{{.Page.Summary}}">
     {{else}}
     <title>{{.T.SiteTitle}}</title>
     <meta name="description" content="{{.T.SiteDescription}}">
@@ -56,6 +59,23 @@
                         <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
                         {{$.Lang.Date .Date}}
                     </time>
+                </div>
+                <div class="p-6 sm:p-8 markdown-content">
+                    {{.Content}}
+                </div>
+            </article>
+        </main>
+        {{else with .Page}}
+        <main>
+            <p class="mb-6 font-mono text-sm">
+                <a href="/" class="text-slate-500 transition hover:text-white"><span class="text-slate-600">$</span> cd <span class="text-k8s-light">~</span></a>
+            </p>
+            <article class="rounded-xl border border-cluster-700 bg-cluster-900/80 backdrop-blur overflow-hidden shadow-lg shadow-black/30">
+                <div class="flex items-center gap-2 border-b border-cluster-700 bg-cluster-800/80 px-4 py-2.5 font-mono text-xs text-slate-500">
+                    <span class="h-3 w-3 rounded-full bg-rose-500/70"></span>
+                    <span class="h-3 w-3 rounded-full bg-amber-400/70"></span>
+                    <span class="h-3 w-3 rounded-full bg-emerald-500/70"></span>
+                    <span class="ml-2 truncate">cat ~/<span class="text-slate-300">{{.Slug}}.md</span></span>
                 </div>
                 <div class="p-6 sm:p-8 markdown-content">
                     {{.Content}}
