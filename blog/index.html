@@ -4,10 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     {{if .Post}}
-    <title>{{.Post.Title}} · Patrick's Blog</title>
+    <title>{{.Post.Title}} · {{.T.HomeTitle}}</title>
     <meta name="description" content="{{.Post.Summary}}">
     {{else if .Page}}
-    <title>{{.Page.Title}} · Patrick's Blog</title>
+    <title>{{.Page.Title}} · {{.T.HomeTitle}}</title>
     <meta name="description" content="{{.Page.Summary}}">
     {{else}}
     <title>{{.T.SiteTitle}}</title>
@@ -34,12 +34,13 @@
                 <span class="font-semibold tracking-tight">patrick<span class="text-k8s-light">.laabs</span></span>
             </a>
             <div class="flex items-center gap-4">
+            <a href="{{.Lang.Prefix}}/about" class="transition hover:text-white {{if .Page}}text-white{{else}}text-slate-400{{end}}"{{if .Page}} aria-current="page"{{end}}><span class="text-slate-600">~/</span>about</a>
             <ul class="flex items-center gap-1 text-xs" aria-label="Language">
                 {{range .Alternates}}
                 <li>{{if .Current}}<span class="rounded px-1.5 py-0.5 text-white" aria-current="true">{{.Label}}</span>{{else}}<a href="{{.URL}}" hreflang="{{.Code}}" lang="{{.Code}}" title="{{$.T.SwitchLanguage}}" class="rounded px-1.5 py-0.5 text-slate-500 transition hover:text-white">{{.Label}}</a>{{end}}</li>
                 {{end}}
             </ul>
-            <a href="{{if .Post}}{{.Lang.Prefix}}/{{end}}#chaos" title="{{.T.BadgeTitle}}" data-cluster-badge data-base="flex items-center gap-2 rounded-full border px-3 py-1 text-xs transition hover:brightness-125" class="flex items-center gap-2 rounded-full border px-3 py-1 text-xs transition hover:brightness-125 border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
+            <a href="{{if or .Post .Page}}{{.Lang.Prefix}}/{{end}}#chaos" title="{{.T.BadgeTitle}}" data-cluster-badge data-base="flex items-center gap-2 rounded-full border px-3 py-1 text-xs transition hover:brightness-125" class="flex items-center gap-2 rounded-full border px-3 py-1 text-xs transition hover:brightness-125 border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
                 <span data-cluster-badge-dot class="status-dot h-2 w-2 rounded-full bg-emerald-400"></span>
                 <span data-cluster-badge-text>Running</span>
             </a>
@@ -68,9 +69,10 @@
         {{else with .Page}}
         <main>
             <p class="mb-6 font-mono text-sm">
-                <a href="/" class="text-slate-500 transition hover:text-white"><span class="text-slate-600">$</span> cd <span class="text-k8s-light">~</span></a>
+                <a href="{{$.Lang.Prefix}}/" class="text-slate-500 transition hover:text-white"><span class="text-slate-600">$</span> cd <span class="text-k8s-light">~</span></a>
             </p>
-            <article class="rounded-xl border border-cluster-700 bg-cluster-900/80 backdrop-blur overflow-hidden shadow-lg shadow-black/30">
+            {{with $.OnlyIn}}<p class="mb-4 rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-2.5 text-sm text-amber-200">{{.}}</p>{{end}}
+            <article lang="{{.Lang}}" class="rounded-xl border border-cluster-700 bg-cluster-900/80 backdrop-blur overflow-hidden shadow-lg shadow-black/30">
                 <div class="flex items-center gap-2 border-b border-cluster-700 bg-cluster-800/80 px-4 py-2.5 font-mono text-xs text-slate-500">
                     <span class="h-3 w-3 rounded-full bg-rose-500/70"></span>
                     <span class="h-3 w-3 rounded-full bg-amber-400/70"></span>
