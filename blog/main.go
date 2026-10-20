@@ -36,7 +36,7 @@ var indexHTML embed.FS
 //go:embed posts/*.md
 var postsFS embed.FS
 
-//go:embed about.md
+//go:embed about*.md
 var aboutFS embed.FS
 
 //go:embed static
@@ -50,7 +50,7 @@ func (embedFS) Open(name string) (fs.File, error) {
 	switch {
 	case name == "index.html":
 		return indexHTML.Open(name)
-	case name == "about.md":
+	case strings.HasPrefix(name, "about") && strings.HasSuffix(name, ".md"):
 		return aboutFS.Open(name)
 	case name == "posts" || strings.HasPrefix(name, "posts/"):
 		return postsFS.Open(name)
@@ -107,6 +107,7 @@ type Post struct {
 // Page is a standalone Markdown page outside the post list, like /about.
 type Page struct {
 	Slug    string
+	Lang    string
 	Title   string
 	Summary string
 	Content template.HTML
@@ -236,9 +237,30 @@ func loadPosts(fsys fs.FS) Library {
 	return lib
 }
 
-// loadPage reads and renders the Markdown file name in fsys as a page served
-// at /slug.
-func loadPage(fsys fs.FS, name, slug string) (Page, error) {
+// loadPage reads and renders the page served at /slug: slug.md in the
+// default language and, like posts, slug.<lang>.md for each translation.
+// Only the default language is required.
+func loadPage(fsys fs.FS, slug string) (map[string]Page, error) {
+	pages := map[string]Page{}
+	for i, l := range languages {
+		name := slug + ".md"
+		if i > 0 {
+			name = slug + "." + l.Code + ".md"
+		}
+		p, err := loadPageFile(fsys, name, slug)
+		if i > 0 && errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		p.Lang = l.Code
+		pages[l.Code] = p
+	}
+	return pages, nil
+}
+
+func loadPageFile(fsys fs.FS, name, slug string) (Page, error) {
 	data, err := fs.ReadFile(fsys, name)
 	if err != nil {
 		return Page{}, err
@@ -324,7 +346,7 @@ func groupByYear(posts []Post) []YearGroup {
 func contentVersion(fsys fs.FS) string {
 	var latest time.Time
 	var count int
-	for _, root := range []string{"index.html", "about.md", "posts", "static"} {
+	for _, root := range []string{"index.html", "about.md", "about.de.md", "posts", "static"} {
 		fs.WalkDir(fsys, root, func(_ string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return nil
@@ -396,7 +418,7 @@ func main() {
 		log.Fatal(err)
 	}
 	posts := loadPosts(contentFS)
-	about, err := loadPage(contentFS, "about.md", "about")
+	about, err := loadPage(contentFS, "about")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -530,23 +552,39 @@ func main() {
 		}
 	}
 
-	mux.HandleFunc("GET /about", func(w http.ResponseWriter, r *http.Request) {
-		t, _, ok := current(w)
-		if !ok {
-			return
-		}
-		page := about
-		if *dev {
-			p, err := loadPage(contentFS, "about.md", "about")
-			if err != nil {
-				log.Println("Error loading about page:", err)
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+	for _, lang := range languages {
+		mux.HandleFunc("GET "+lang.Prefix+"/about", func(w http.ResponseWriter, r *http.Request) {
+			t, _, ok := current(w)
+			if !ok {
 				return
 			}
-			page = p
-		}
-		render(w, t, map[string]any{"Page": page})
-	})
+			pages := about
+			if *dev {
+				p, err := loadPage(contentFS, "about")
+				if err != nil {
+					log.Println("Error loading about page:", err)
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+				pages = p
+			}
+			page, ok := pages[lang.Code]
+			if !ok {
+				page = pages[defaultLanguage().Code]
+			}
+			data := pageData(r, lang, "/about", func(l Language) bool {
+				_, ok := pages[l.Code]
+				return ok
+			})
+			data["Page"] = page
+			if page.Lang != lang.Code {
+				orig, _ := languageByCode(page.Lang)
+				data["Canonical"] = orig.Prefix + "/about"
+				data["OnlyIn"] = lang.OnlyInPageText(page.Lang)
+			}
+			render(w, t, data)
+		})
+	}
 
 	// Liveness: the process is up and able to serve requests.
 	mux.HandleFunc("/healthz", probeHandler(func() bool { return true }))

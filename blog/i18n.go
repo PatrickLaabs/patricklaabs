@@ -41,6 +41,8 @@ var languages = []Language{
 			TrafficStart:    "Send some traffic",
 			LatestPosts:     "Latest posts",
 			OnlyIn:          "This post is only available in %s.",
+			OnlyInPage:      "This page is only available in %s.",
+			HomeTitle:       "Patrick's Blog",
 			TerminalTitle:   "Open a terminal (or press ~)",
 			TerminalPress:   "press",
 			BuiltWith:       "built with",
@@ -69,6 +71,8 @@ var languages = []Language{
 			TrafficStart:    "Traffic schicken",
 			LatestPosts:     "Neueste Beiträge",
 			OnlyIn:          "Diesen Beitrag gibt es nur auf %s.",
+			OnlyInPage:      "Diese Seite gibt es nur auf %s.",
+			HomeTitle:       "Patricks Blog",
 			TerminalTitle:   "Terminal öffnen (oder ~ drücken)",
 			TerminalPress:   "drücke",
 			BuiltWith:       "gebaut mit",
@@ -92,6 +96,7 @@ type UIText struct {
 	WelcomeText                                       template.HTML
 	ChaosIntro, ChaosStart, ChaosSimulated, ChaosLazy string
 	TrafficIntro, TrafficStart, LatestPosts, OnlyIn   string
+	OnlyInPage, HomeTitle                             string
 	TerminalTitle, TerminalPress, BuiltWith           string
 }
 
@@ -125,6 +130,11 @@ func (l Language) ShortDate(t time.Time) string {
 // OnlyInText says that a post exists only in the language with code.
 func (l Language) OnlyInText(code string) string {
 	return fmt.Sprintf(l.Text.OnlyIn, languageNames[l.Code][code])
+}
+
+// OnlyInPageText says that a page exists only in the language with code.
+func (l Language) OnlyInPageText(code string) string {
+	return fmt.Sprintf(l.Text.OnlyInPage, languageNames[l.Code][code])
 }
 
 // Alternate is a link to the current page in one language.
