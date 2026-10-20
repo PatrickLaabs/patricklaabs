@@ -97,6 +97,7 @@ func securityHeaders(next http.Handler) http.Handler {
 
 type Post struct {
 	Slug    string
+	Lang    string
 	Title   string
 	Summary string
 	Date    time.Time
@@ -128,20 +129,56 @@ var md = goldmark.New(
 	),
 )
 
-// postFilename matches posts/YYYY-MM-DD-slug.md; the date is the publish date.
-var postFilename = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2})-([a-z0-9-]+)\.md$`)
+// postFilename matches posts/YYYY-MM-DD-slug.md and its translations like
+// posts/YYYY-MM-DD-slug.de.md; the date is the publish date. Translations of
+// a post share its slug.
+var postFilename = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2})-([a-z0-9-]+)(?:\.([a-z]{2}))?\.md$`)
+
+// Library holds every post by slug, then by language code.
+type Library map[string]map[string]Post
+
+// pick returns the version of the post slug in lang, or else the one in the
+// first language that has it.
+func (lib Library) pick(slug, lang string) (Post, bool) {
+	versions := lib[slug]
+	if p, ok := versions[lang]; ok {
+		return p, true
+	}
+	for _, l := range languages {
+		if p, ok := versions[l.Code]; ok {
+			return p, true
+		}
+	}
+	return Post{}, false
+}
+
+// list returns one version of every post for lang, newest first. Posts that
+// are not translated into lang are listed in their own language.
+func (lib Library) list(lang string) []Post {
+	posts := make([]Post, 0, len(lib))
+	for slug := range lib {
+		p, _ := lib.pick(slug, lang)
+		posts = append(posts, p)
+	}
+	sort.Slice(posts, func(i, j int) bool {
+		if !posts[i].Date.Equal(posts[j].Date) {
+			return posts[i].Date.After(posts[j].Date)
+		}
+		return posts[i].Slug < posts[j].Slug
+	})
+	return posts
+}
 
 // loadPosts reads and renders every Markdown file in the posts directory of
-// fsys, newest first.
-func loadPosts(fsys fs.FS) []Post {
-	var posts []Post
+// fsys.
+func loadPosts(fsys fs.FS) Library {
+	lib := Library{}
 	entries, err := fs.ReadDir(fsys, "posts")
 	if err != nil {
 		// Log error but do not fatal in case there are no posts or directory is missing
 		log.Println("Could not read posts directory:", err)
-		return nil
+		return lib
 	}
-	seen := map[string]bool{}
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
 			continue
@@ -156,12 +193,17 @@ func loadPosts(fsys fs.FS) []Post {
 			log.Printf("Skipping post %s: %v", entry.Name(), err)
 			continue
 		}
-		slug := m[2]
-		if seen[slug] {
-			log.Printf("Skipping post %s: slug %q is already taken", entry.Name(), slug)
+		slug, lang := m[2], m[3]
+		if lang == "" {
+			lang = defaultLanguage().Code
+		} else if _, ok := languageByCode(lang); !ok {
+			log.Printf("Skipping post %s: unknown language %q", entry.Name(), lang)
 			continue
 		}
-		seen[slug] = true
+		if _, taken := lib[slug][lang]; taken {
+			log.Printf("Skipping post %s: slug %q is already taken in %q", entry.Name(), slug, lang)
+			continue
+		}
 
 		data, err := fs.ReadFile(fsys, "posts/"+entry.Name())
 		if err != nil {
@@ -179,21 +221,19 @@ func loadPosts(fsys fs.FS) []Post {
 			log.Println("Error converting post:", err)
 			continue
 		}
-		posts = append(posts, Post{
+		if lib[slug] == nil {
+			lib[slug] = map[string]Post{}
+		}
+		lib[slug][lang] = Post{
 			Slug:    slug,
+			Lang:    lang,
 			Title:   title,
 			Summary: summary,
 			Date:    date,
 			Content: template.HTML(buf.String()),
-		})
-	}
-	sort.SliceStable(posts, func(i, j int) bool {
-		if !posts[i].Date.Equal(posts[j].Date) {
-			return posts[i].Date.After(posts[j].Date)
 		}
-		return posts[i].Slug < posts[j].Slug
-	})
-	return posts
+	}
+	return lib
 }
 
 // loadPage reads and renders the Markdown file name in fsys as a page served
@@ -321,6 +361,16 @@ func assetVersion(fsys fs.FS) string {
 	return hex.EncodeToString(h.Sum(nil))[:12]
 }
 
+// origin returns the scheme and host the request was made to, for the
+// absolute URLs in canonical and hreflang links.
+func origin(r *http.Request) string {
+	scheme := "http"
+	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+		scheme = "https"
+	}
+	return scheme + "://" + r.Host
+}
+
 // hashedAsset matches bundler output like js/chaos-EYWIP36I.js, whose name
 // changes whenever its content does.
 var hashedAsset = regexp.MustCompile(`-[A-Z0-9]{8}\.js$`)
@@ -401,7 +451,7 @@ func main() {
 
 	// current returns the template and posts to serve: the ones loaded at
 	// startup, or fresh copies from disk in dev mode.
-	current := func(w http.ResponseWriter) (*template.Template, []Post, bool) {
+	current := func(w http.ResponseWriter) (*template.Template, Library, bool) {
 		if !*dev {
 			return tmpl, posts, true
 		}
@@ -414,34 +464,71 @@ func main() {
 		return t, loadPosts(contentFS), true
 	}
 
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
-			http.NotFound(w, r)
-			return
+	// pageData returns the template data shared by every page in lang at
+	// path, which has no language prefix. has reports whether a language has
+	// its own version of the page; the others get no hreflang link.
+	pageData := func(r *http.Request, lang Language, path string, has func(Language) bool) map[string]any {
+		var alts []Alternate
+		for _, l := range languages {
+			alts = append(alts, Alternate{
+				Language: l,
+				URL:      l.Prefix + path,
+				Current:  l.Code == lang.Code,
+				Exists:   has(l),
+			})
 		}
-		t, posts, ok := current(w)
-		if !ok {
-			return
+		return map[string]any{
+			"Lang":       lang,
+			"T":          lang.Text,
+			"Origin":     origin(r),
+			"Alternates": alts,
 		}
-		render(w, t, map[string]any{
-			"Posts": posts,
-			"Years": groupByYear(posts),
-		})
-	})
+	}
+	always := func(Language) bool { return true }
 
-	mux.HandleFunc("GET /posts/{slug}", func(w http.ResponseWriter, r *http.Request) {
-		t, posts, ok := current(w)
-		if !ok {
-			return
-		}
-		for _, p := range posts {
-			if p.Slug == r.PathValue("slug") {
-				render(w, t, map[string]any{"Post": p})
+	for _, lang := range languages {
+		mux.HandleFunc(lang.Prefix+"/{$}", func(w http.ResponseWriter, r *http.Request) {
+			t, lib, ok := current(w)
+			if !ok {
 				return
 			}
+			posts := lib.list(lang.Code)
+			data := pageData(r, lang, "/", always)
+			data["Posts"] = posts
+			data["Years"] = groupByYear(posts)
+			render(w, t, data)
+		})
+
+		mux.HandleFunc("GET "+lang.Prefix+"/posts/{slug}", func(w http.ResponseWriter, r *http.Request) {
+			t, lib, ok := current(w)
+			if !ok {
+				return
+			}
+			slug := r.PathValue("slug")
+			p, ok := lib.pick(slug, lang.Code)
+			if !ok {
+				http.NotFound(w, r)
+				return
+			}
+			data := pageData(r, lang, "/posts/"+slug, func(l Language) bool {
+				_, ok := lib[slug][l.Code]
+				return ok
+			})
+			data["Post"] = p
+			if p.Lang != lang.Code {
+				// Untranslated: show the original with this language's
+				// interface, and point search engines at the original.
+				orig, _ := languageByCode(p.Lang)
+				data["Canonical"] = orig.Prefix + "/posts/" + slug
+				data["OnlyIn"] = lang.OnlyInText(p.Lang)
+			}
+			render(w, t, data)
+		})
+
+		if lang.Prefix != "" {
+			mux.Handle("GET "+lang.Prefix, http.RedirectHandler(lang.Prefix+"/", http.StatusMovedPermanently))
 		}
-		http.NotFound(w, r)
-	})
+	}
 
 	mux.HandleFunc("GET /about", func(w http.ResponseWriter, r *http.Request) {
 		t, _, ok := current(w)

@@ -2,7 +2,7 @@ TAILWIND := npx --yes tailwindcss@3.4.19 -i ./assets/input.css -o ./static/style
 PORT ?= 8080
 
 .DEFAULT_GOAL := help
-.PHONY: help dev serve css css-watch js js-watch new-post build-container
+.PHONY: help dev serve css css-watch js js-watch new-post translate-post build-container
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -36,13 +36,25 @@ js: web/node_modules ## Bundle the interactive JavaScript (commit the result)
 js-watch: web/node_modules ## Rebundle the JavaScript whenever web/src changes
 	cd web && npm run --silent watch
 
-new-post: ## Create a new post: make new-post TITLE="My new post"
-	@test -n "$(TITLE)" || { echo 'usage: make new-post TITLE="My new post"'; exit 1; }
+# English posts have no language suffix; others end in .<lang>.md, e.g. .de.md.
+new-post: ## Create a new post: make new-post TITLE="My new post" [LANG=de]
+	@test -n "$(TITLE)" || { echo 'usage: make new-post TITLE="My new post" [LANG=de]'; exit 1; }
 	@slug=$$(echo "$(TITLE)" | sed 's/ä/ae/g; s/Ä/Ae/g; s/ö/oe/g; s/Ö/Oe/g; s/ü/ue/g; s/Ü/Ue/g; s/ß/ss/g' | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$$//g'); \
-	file="posts/$$(date +%Y-%m-%d)-$$slug.md"; \
+	file="posts/$$(date +%Y-%m-%d)-$$slug$(if $(filter-out en,$(LANG)),.$(LANG)).md"; \
 	test ! -e "$$file" || { echo "$$file already exists"; exit 1; }; \
 	printf '# %s\n\nWrite your post here.\n' "$(TITLE)" > "$$file"; \
 	echo "Created $$file"
+
+# A translation shares the original's slug, so the language switcher and the
+# hreflang links can pair them up. It starts as a copy of the original.
+translate-post: ## Start a translation of a post: make translate-post POST=readiness-vs-liveness-probes LANG=de
+	@test -n "$(POST)" -a -n "$(LANG)" || { echo 'usage: make translate-post POST=<slug> LANG=de'; exit 1; }
+	@src=$$(ls posts/????-??-??-$(POST).md 2>/dev/null | head -n1); \
+	test -n "$$src" || { echo "no post with slug $(POST) in posts/"; exit 1; }; \
+	file="$${src%.md}.$(LANG).md"; \
+	test ! -e "$$file" || { echo "$$file already exists"; exit 1; }; \
+	cp "$$src" "$$file"; \
+	echo "Created $$file, translate it there"
 
 build-container: ## Build the container image locally with ko
 	ko build --local .
