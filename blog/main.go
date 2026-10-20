@@ -36,6 +36,9 @@ var indexHTML embed.FS
 //go:embed posts/*.md
 var postsFS embed.FS
 
+//go:embed about.md
+var aboutFS embed.FS
+
 //go:embed static
 var staticFS embed.FS
 
@@ -47,6 +50,8 @@ func (embedFS) Open(name string) (fs.File, error) {
 	switch {
 	case name == "index.html":
 		return indexHTML.Open(name)
+	case name == "about.md":
+		return aboutFS.Open(name)
 	case name == "posts" || strings.HasPrefix(name, "posts/"):
 		return postsFS.Open(name)
 	case name == "static" || strings.HasPrefix(name, "static/"):
@@ -95,6 +100,14 @@ type Post struct {
 	Title   string
 	Summary string
 	Date    time.Time
+	Content template.HTML
+}
+
+// Page is a standalone Markdown page outside the post list, like /about.
+type Page struct {
+	Slug    string
+	Title   string
+	Summary string
 	Content template.HTML
 }
 
@@ -183,6 +196,22 @@ func loadPosts(fsys fs.FS) []Post {
 	return posts
 }
 
+// loadPage reads and renders the Markdown file name in fsys as a page served
+// at /slug.
+func loadPage(fsys fs.FS, name, slug string) (Page, error) {
+	data, err := fs.ReadFile(fsys, name)
+	if err != nil {
+		return Page{}, err
+	}
+	doc := md.Parser().Parse(text.NewReader(data))
+	title, summary := postInfo(doc, data)
+	var buf bytes.Buffer
+	if err := md.Renderer().Render(&buf, data, doc); err != nil {
+		return Page{}, err
+	}
+	return Page{Slug: slug, Title: title, Summary: summary, Content: template.HTML(buf.String())}, nil
+}
+
 // postInfo returns the text of a post's first top-level heading and of the
 // first paragraph after it, shortened for the post list.
 func postInfo(doc ast.Node, source []byte) (title, summary string) {
@@ -255,7 +284,7 @@ func groupByYear(posts []Post) []YearGroup {
 func contentVersion(fsys fs.FS) string {
 	var latest time.Time
 	var count int
-	for _, root := range []string{"index.html", "posts", "static"} {
+	for _, root := range []string{"index.html", "about.md", "posts", "static"} {
 		fs.WalkDir(fsys, root, func(_ string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return nil
@@ -317,6 +346,10 @@ func main() {
 		log.Fatal(err)
 	}
 	posts := loadPosts(contentFS)
+	about, err := loadPage(contentFS, "about.md", "about")
+	if err != nil {
+		log.Fatal(err)
+	}
 	version := assetVersion(contentFS)
 
 	static, err := fs.Sub(contentFS, "static")
@@ -408,6 +441,24 @@ func main() {
 			}
 		}
 		http.NotFound(w, r)
+	})
+
+	mux.HandleFunc("GET /about", func(w http.ResponseWriter, r *http.Request) {
+		t, _, ok := current(w)
+		if !ok {
+			return
+		}
+		page := about
+		if *dev {
+			p, err := loadPage(contentFS, "about.md", "about")
+			if err != nil {
+				log.Println("Error loading about page:", err)
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			page = p
+		}
+		render(w, t, map[string]any{"Page": page})
 	})
 
 	// Liveness: the process is up and able to serve requests.
