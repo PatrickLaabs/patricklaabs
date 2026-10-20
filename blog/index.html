@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{.Lang.Code}}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,9 +7,12 @@
     <title>{{.Post.Title}} · Patrick's Blog</title>
     <meta name="description" content="{{.Post.Summary}}">
     {{else}}
-    <title>Patrick's Blog · Kubernetes &amp; Cloud Native</title>
-    <meta name="description" content="Notes on Kubernetes, cloud-native infrastructure, Go and platform engineering.">
+    <title>{{.T.SiteTitle}}</title>
+    <meta name="description" content="{{.T.SiteDescription}}">
     {{end}}
+    {{with .Canonical}}<link rel="canonical" href="{{$.Origin}}{{.}}">{{end}}
+    {{range .Alternates}}{{if .Exists}}<link rel="alternate" hreflang="{{.Code}}" href="{{$.Origin}}{{.URL}}">
+    {{end}}{{end}}{{with index .Alternates 0}}{{if .Exists}}<link rel="alternate" hreflang="x-default" href="{{$.Origin}}{{.URL}}">{{end}}{{end}}
     <meta name="theme-color" content="#070b14">
     <meta name="htmx-config" content='{"includeIndicatorStyles":false}'>
     <link rel="stylesheet" href="/static/styles.css?v={{.AssetVersion}}">
@@ -19,7 +22,7 @@
 <body class="bg-grid text-slate-300 font-sans leading-relaxed antialiased min-h-screen selection:bg-k8s selection:text-white">
     <div class="max-w-3xl mx-auto px-4 py-8 sm:py-12">
         <nav class="flex items-center justify-between mb-12 font-mono text-sm">
-            <a href="/" class="flex items-center gap-3 text-slate-100 hover:text-white">
+            <a href="{{.Lang.Prefix}}/" class="flex items-center gap-3 text-slate-100 hover:text-white">
                 <svg class="w-9 h-9 text-k8s" viewBox="0 0 32 32" fill="none" aria-hidden="true">
                     <path d="M16 2 27.5 7.6l2.8 12.4-7.9 10H9.6l-7.9-10L4.5 7.6Z" fill="currentColor"/>
                     <circle cx="16" cy="16" r="5" stroke="#fff" stroke-width="2"/>
@@ -27,23 +30,31 @@
                 </svg>
                 <span class="font-semibold tracking-tight">patrick<span class="text-k8s-light">.laabs</span></span>
             </a>
-            <a href="{{if .Post}}/{{end}}#chaos" title="Try to break it" data-cluster-badge data-base="flex items-center gap-2 rounded-full border px-3 py-1 text-xs transition hover:brightness-125" class="flex items-center gap-2 rounded-full border px-3 py-1 text-xs transition hover:brightness-125 border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
+            <div class="flex items-center gap-4">
+            <ul class="flex items-center gap-1 text-xs" aria-label="Language">
+                {{range .Alternates}}
+                <li>{{if .Current}}<span class="rounded px-1.5 py-0.5 text-white" aria-current="true">{{.Label}}</span>{{else}}<a href="{{.URL}}" hreflang="{{.Code}}" lang="{{.Code}}" title="{{$.T.SwitchLanguage}}" class="rounded px-1.5 py-0.5 text-slate-500 transition hover:text-white">{{.Label}}</a>{{end}}</li>
+                {{end}}
+            </ul>
+            <a href="{{if .Post}}{{.Lang.Prefix}}/{{end}}#chaos" title="{{.T.BadgeTitle}}" data-cluster-badge data-base="flex items-center gap-2 rounded-full border px-3 py-1 text-xs transition hover:brightness-125" class="flex items-center gap-2 rounded-full border px-3 py-1 text-xs transition hover:brightness-125 border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
                 <span data-cluster-badge-dot class="status-dot h-2 w-2 rounded-full bg-emerald-400"></span>
                 <span data-cluster-badge-text>Running</span>
             </a>
+            </div>
         </nav>
 
         {{with .Post}}
         <main>
             <p class="mb-6 font-mono text-sm">
-                <a href="/#posts" class="text-slate-500 transition hover:text-white"><span class="text-slate-600">$</span> cd <span class="text-k8s-light">..</span></a>
+                <a href="{{$.Lang.Prefix}}/#posts" class="text-slate-500 transition hover:text-white"><span class="text-slate-600">$</span> cd <span class="text-k8s-light">..</span></a>
             </p>
-            <article class="rounded-xl border border-cluster-700 bg-cluster-900/80 backdrop-blur overflow-hidden shadow-lg shadow-black/30">
+            {{with $.OnlyIn}}<p class="mb-4 rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-2.5 text-sm text-amber-200">{{.}}</p>{{end}}
+            <article lang="{{.Lang}}" class="rounded-xl border border-cluster-700 bg-cluster-900/80 backdrop-blur overflow-hidden shadow-lg shadow-black/30">
                 <div class="flex items-center justify-between gap-4 border-b border-cluster-700 bg-cluster-800/80 px-4 py-2.5 font-mono text-xs">
                     <span class="truncate text-slate-500">post/<span class="text-slate-300">{{.Slug}}</span></span>
                     <time datetime="{{.Date.Format "2006-01-02"}}" class="flex shrink-0 items-center gap-1.5 text-emerald-300">
                         <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
-                        {{.Date.Format "Jan 2, 2006"}}
+                        {{$.Lang.Date .Date}}
                     </time>
                 </div>
                 <div class="p-6 sm:p-8 markdown-content">
@@ -58,11 +69,11 @@
                 <span class="text-slate-300 cursor">kubectl get posts -n blog</span>
             </p>
             <h1 class="text-4xl sm:text-5xl font-extrabold text-white tracking-tight mb-4">
-                Kubernetes, Cloud Native<br class="hidden sm:block">
-                <span class="bg-gradient-to-r from-k8s-light via-sky-400 to-cyan-300 bg-clip-text text-transparent">&amp; everything in between.</span>
+                {{.T.HeroTitle}}<br class="hidden sm:block">
+                <span class="bg-gradient-to-r from-k8s-light via-sky-400 to-cyan-300 bg-clip-text text-transparent">{{.T.HeroHighlight}}</span>
             </h1>
             <p class="text-lg text-slate-400 max-w-2xl">
-                Notes from a Go developer on running workloads in production &mdash; clusters, operators, GitOps, observability and platform engineering.
+                {{.T.HeroIntro}}
             </p>
             <ul class="mt-6 flex flex-wrap gap-2 font-mono text-xs">
                 <li class="rounded-md border border-k8s/40 bg-k8s/10 px-2.5 py-1 text-k8s-light">#kubernetes</li>
@@ -82,9 +93,9 @@
                     <span class="ml-2">deployment.yaml</span>
                 </div>
                 <div class="p-6 sm:p-8">
-                    <h2 class="text-2xl font-bold text-white mb-3">Welcome to my personal blog</h2>
+                    <h2 class="text-2xl font-bold text-white mb-3">{{.T.WelcomeTitle}}</h2>
                     <p class="text-slate-400 mb-6">
-                        This blog eats its own dog food: written in <span class="text-sky-300 font-medium">Go</span>, enhanced with <span class="text-sky-300 font-medium">HTMX</span>, built into a distroless image with <span class="text-sky-300 font-medium">ko</span> and running on <span class="text-k8s-light font-medium">Kubernetes</span>.
+                        {{.T.WelcomeText}}
                     </p>
 
                     <pre class="mb-6 overflow-x-auto rounded-lg border border-cluster-700 bg-cluster-950 p-4 font-mono text-xs sm:text-sm leading-6"><code><span class="text-sky-400">apiVersion</span><span class="text-slate-500">:</span> <span class="text-amber-200">apps/v1</span>
@@ -119,13 +130,13 @@
                 <div class="p-6 sm:p-8" data-chaos-body>
                     <h2 class="text-2xl font-bold text-white mb-3">🐒 Chaos Monkey</h2>
                     <p class="text-slate-400 mb-6">
-                        Boot a Kubernetes cluster running this blog, right here in your browser. Then kill its pods and see whether you can destroy faster than Kubernetes heals.
+                        {{.T.ChaosIntro}}
                     </p>
                     <button type="button" data-chaos-start class="inline-flex items-center gap-2 whitespace-nowrap rounded-md bg-rose-600 px-4 sm:px-5 py-2.5 font-mono text-xs sm:text-sm font-semibold text-white shadow-lg shadow-rose-900/40 transition hover:bg-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-2 focus:ring-offset-cluster-900 disabled:cursor-wait disabled:opacity-70">
-                        &#9654; Boot the cluster
+                        &#9654; {{.T.ChaosStart}}
                     </button>
                     <p class="mt-4 font-mono text-xs text-slate-600">
-                        Simulated with <a href="https://github.com/ngrok/webernetes" class="underline decoration-slate-700 underline-offset-2 hover:text-slate-400">webernetes</a> &middot; ~140&nbsp;KB, loaded only when you click
+                        {{.T.ChaosSimulated}} <a href="https://github.com/ngrok/webernetes" class="underline decoration-slate-700 underline-offset-2 hover:text-slate-400">webernetes</a> &middot; ~140&nbsp;KB, {{.T.ChaosLazy}}
                     </p>
                 </div>
             </section>
@@ -141,10 +152,10 @@
                 <div class="p-6 sm:p-8" data-traffic-body>
                     <h2 class="text-2xl font-bold text-white mb-3">📡 Load Balancing</h2>
                     <p class="text-slate-400 mb-6">
-                        Fire HTTP requests at the blog's Service and watch them fly to the pods round-robin. Then go kill some pods and see whether a single request fails.
+                        {{.T.TrafficIntro}}
                     </p>
                     <button type="button" data-traffic-start class="inline-flex items-center gap-2 whitespace-nowrap rounded-md bg-k8s px-4 sm:px-5 py-2.5 font-mono text-xs sm:text-sm font-semibold text-white shadow-lg shadow-k8s/30 transition hover:bg-k8s-light focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-cluster-900 disabled:cursor-wait disabled:opacity-70">
-                        &#9654; Send some traffic
+                        &#9654; {{.T.TrafficStart}}
                     </button>
                 </div>
             </section>
@@ -152,7 +163,7 @@
             {{if .Posts}}
             <section id="posts" class="scroll-mt-8">
                 <div class="flex items-center justify-between mb-4 font-mono text-xs uppercase tracking-wider text-slate-500">
-                    <span>Latest posts</span>
+                    <span>{{.T.LatestPosts}}</span>
                     <span>{{len .Posts}} {{if eq (len .Posts) 1}}resource{{else}}resources{{end}}</span>
                 </div>
                 {{range .Years}}
@@ -160,10 +171,10 @@
                 <ul class="space-y-3">
                     {{range .Posts}}
                     <li>
-                        <a href="/posts/{{.Slug}}" class="group block rounded-xl border border-cluster-700 bg-cluster-900/80 backdrop-blur p-5 shadow-lg shadow-black/30 transition hover:border-k8s/60 hover:shadow-k8s/10">
-                            <time datetime="{{.Date.Format "2006-01-02"}}" class="font-mono text-xs text-emerald-300">{{.Date.Format "Jan 2"}}</time>
-                            <h3 class="mt-1 text-lg font-bold text-white transition group-hover:text-k8s-light">{{.Title}}</h3>
-                            {{if .Summary}}<p class="mt-2 text-sm text-slate-400">{{.Summary}}</p>{{end}}
+                        <a href="{{$.Lang.Prefix}}/posts/{{.Slug}}"{{if ne .Lang $.Lang.Code}} hreflang="{{.Lang}}"{{end}} class="group block rounded-xl border border-cluster-700 bg-cluster-900/80 backdrop-blur p-5 shadow-lg shadow-black/30 transition hover:border-k8s/60 hover:shadow-k8s/10">
+                            <time datetime="{{.Date.Format "2006-01-02"}}" class="font-mono text-xs text-emerald-300">{{$.Lang.ShortDate .Date}}</time>{{if ne .Lang $.Lang.Code}} <span class="ml-1 rounded border border-cluster-600 px-1 font-mono text-[10px] uppercase text-slate-400">{{.Lang}}</span>{{end}}
+                            <h3 lang="{{.Lang}}" class="mt-1 text-lg font-bold text-white transition group-hover:text-k8s-light">{{.Title}}</h3>
+                            {{if .Summary}}<p lang="{{.Lang}}" class="mt-2 text-sm text-slate-400">{{.Summary}}</p>{{end}}
                         </a>
                     </li>
                     {{end}}
@@ -178,14 +189,14 @@
             <p>
                 &copy; 2026 Patrick Laabs
                 <span class="mx-1 text-slate-700">|</span>
-                <button type="button" data-terminal-open class="rounded border border-cluster-600 px-1.5 py-0.5 text-slate-400 transition hover:border-k8s hover:text-white" title="Open a terminal (or press ~)">&gt;_ <span class="sm:hidden">terminal</span><span class="hidden sm:inline">press <kbd class="text-cyan-400">~</kbd></span></button>
+                <button type="button" data-terminal-open class="rounded border border-cluster-600 px-1.5 py-0.5 text-slate-400 transition hover:border-k8s hover:text-white" title="{{.T.TerminalTitle}}">&gt;_ <span class="sm:hidden">terminal</span><span class="hidden sm:inline">{{.T.TerminalPress}} <kbd class="text-cyan-400">~</kbd></span></button>
             </p>
             <p class="text-center">
                 <span class="text-slate-600">context:</span> <span class="text-k8s-light">prod</span>
                 <span class="mx-1 text-slate-700">|</span>
                 <span class="text-slate-600">namespace:</span> <span class="text-cyan-400">blog</span>
                 <span class="mx-1 text-slate-700">|</span>
-                <span class="text-slate-600">built with</span> Go · HTMX · ko
+                <span class="text-slate-600">{{.T.BuiltWith}}</span> Go · HTMX · ko
             </p>
         </footer>
     </div>
