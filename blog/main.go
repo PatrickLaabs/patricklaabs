@@ -528,7 +528,7 @@ func main() {
 			data := pageData(r, lang, "/", always)
 			data["Home"] = true
 			data["Posts"] = posts
-			render(w, t, data)
+			render(w, r, t, data)
 		})
 
 		mux.HandleFunc("GET "+lang.Prefix+"/posts", func(w http.ResponseWriter, r *http.Request) {
@@ -554,7 +554,7 @@ func main() {
 			data["Title"] = lang.Text.PlaygroundTitle
 			data["Description"] = lang.Text.PlaygroundDescription
 			data["Playground"] = true
-			render(w, t, data)
+			render(w, r, t, data)
 		})
 
 		mux.HandleFunc("GET "+lang.Prefix+"/posts/{slug}", func(w http.ResponseWriter, r *http.Request) {
