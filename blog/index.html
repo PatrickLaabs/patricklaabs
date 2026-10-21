@@ -9,6 +9,9 @@
     {{else if .Page}}
     <title>{{.Page.Title}} · {{.T.HomeTitle}}</title>
     <meta name="description" content="{{.Page.Summary}}">
+    {{else if .Title}}
+    <title>{{.Title}} · {{.T.HomeTitle}}</title>
+    <meta name="description" content="{{.Description}}">
     {{else}}
     <title>{{.T.SiteTitle}}</title>
     <meta name="description" content="{{.T.SiteDescription}}">
@@ -34,13 +37,17 @@
                 <span class="font-semibold tracking-tight">patrick<span class="text-k8s-light">.laabs</span></span>
             </a>
             <div class="flex items-center gap-4">
-            <a href="{{.Lang.Prefix}}/about" class="transition hover:text-white {{if .Page}}text-white{{else}}text-slate-400{{end}}"{{if .Page}} aria-current="page"{{end}}><span class="text-slate-600">~/</span>about</a>
+            <ul class="hidden sm:flex items-center gap-4">
+                <li><a href="{{.Lang.Prefix}}/posts" class="transition hover:text-white {{if .Years}}text-white{{else}}text-slate-400{{end}}"{{if .Years}} aria-current="page"{{end}}><span class="text-slate-600">~/</span>posts</a></li>
+                <li><a href="{{.Lang.Prefix}}/about" class="transition hover:text-white {{if .Page}}text-white{{else}}text-slate-400{{end}}"{{if .Page}} aria-current="page"{{end}}><span class="text-slate-600">~/</span>about</a></li>
+                <li><a href="{{.Lang.Prefix}}/playground" class="transition hover:text-white {{if .Playground}}text-white{{else}}text-slate-400{{end}}"{{if .Playground}} aria-current="page"{{end}}><span class="text-slate-600">~/</span>playground</a></li>
+            </ul>
             <ul class="flex items-center gap-1 text-xs" aria-label="Language">
                 {{range .Alternates}}
                 <li>{{if .Current}}<span class="rounded px-1.5 py-0.5 text-white" aria-current="true">{{.Label}}</span>{{else}}<a href="{{.URL}}" hreflang="{{.Code}}" lang="{{.Code}}" title="{{$.T.SwitchLanguage}}" class="rounded px-1.5 py-0.5 text-slate-500 transition hover:text-white">{{.Label}}</a>{{end}}</li>
                 {{end}}
             </ul>
-            <a href="{{if or .Post .Page}}{{.Lang.Prefix}}/{{end}}#chaos" title="{{.T.BadgeTitle}}" data-cluster-badge data-base="flex items-center gap-2 rounded-full border px-3 py-1 text-xs transition hover:brightness-125" class="flex items-center gap-2 rounded-full border px-3 py-1 text-xs transition hover:brightness-125 border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
+            <a href="{{if not .Playground}}{{.Lang.Prefix}}/playground{{end}}#chaos" title="{{.T.BadgeTitle}}" data-cluster-badge data-base="flex items-center gap-2 rounded-full border px-3 py-1 text-xs transition hover:brightness-125" class="flex items-center gap-2 rounded-full border px-3 py-1 text-xs transition hover:brightness-125 border-emerald-500/30 bg-emerald-500/10 text-emerald-300">
                 <span data-cluster-badge-dot class="status-dot h-2 w-2 rounded-full bg-emerald-400"></span>
                 <span data-cluster-badge-text>Running</span>
             </a>
@@ -50,7 +57,7 @@
         {{with .Post}}
         <main>
             <p class="mb-6 font-mono text-sm">
-                <a href="{{$.Lang.Prefix}}/#posts" class="text-slate-500 transition hover:text-white"><span class="text-slate-600">$</span> cd <span class="text-k8s-light">..</span></a>
+                <a href="{{$.Lang.Prefix}}/posts" class="text-slate-500 transition hover:text-white"><span class="text-slate-600">$</span> cd <span class="text-k8s-light">..</span></a>
             </p>
             {{with $.OnlyIn}}<p class="mb-4 rounded-lg border border-amber-400/30 bg-amber-400/10 px-4 py-2.5 text-sm text-amber-200">{{.}}</p>{{end}}
             <article lang="{{.Lang}}" class="rounded-xl border border-cluster-700 bg-cluster-900/80 backdrop-blur overflow-hidden shadow-lg shadow-black/30">
@@ -84,18 +91,19 @@
                 </div>
             </article>
         </main>
-        {{else}}
-        <header class="mb-12">
+        {{else}}{{if .Home}}
+        <header class="mb-10">
             <p class="font-mono text-sm text-cyan-400 mb-4">
                 <span class="text-emerald-400">patrick@cluster</span><span class="text-slate-500">:</span><span class="text-k8s-light">~</span><span class="text-slate-500">$</span>
-                <span class="text-slate-300 cursor">kubectl get posts -n blog</span>
+                <span class="text-slate-300 cursor">whoami</span>
             </p>
             <h1 class="text-4xl sm:text-5xl font-extrabold text-white tracking-tight mb-4">
                 {{.T.HeroTitle}}<br class="hidden sm:block">
                 <span class="bg-gradient-to-r from-k8s-light via-sky-400 to-cyan-300 bg-clip-text text-transparent">{{.T.HeroHighlight}}</span>
             </h1>
+            <p class="text-xl font-semibold text-slate-200 mb-2">{{.T.HomeGreeting}}</p>
             <p class="text-lg text-slate-400 max-w-2xl">
-                {{.T.HeroIntro}}
+                {{.T.HomeIntro}}
             </p>
             <ul class="mt-6 flex flex-wrap gap-2 font-mono text-xs">
                 <li class="rounded-md border border-k8s/40 bg-k8s/10 px-2.5 py-1 text-k8s-light">#kubernetes</li>
@@ -104,6 +112,50 @@
                 <li class="rounded-md border border-violet-500/30 bg-violet-500/10 px-2.5 py-1 text-violet-300">#gitops</li>
                 <li class="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-emerald-300">#platform-engineering</li>
             </ul>
+        </header>
+
+        <main>
+            <ul class="space-y-3">
+                <li>
+                    <a href="{{.Lang.Prefix}}/posts" class="group flex items-center gap-4 rounded-xl border border-cluster-700 bg-cluster-900/80 backdrop-blur p-5 shadow-lg shadow-black/30 transition hover:border-k8s/60 hover:shadow-k8s/10">
+                        <div class="min-w-0 flex-1">
+                            <span class="font-mono text-xs text-emerald-300"><span class="text-slate-600">~/</span>posts</span>{{with .Posts}}{{with index . 0}}
+                            <span class="ml-2 font-mono text-xs text-slate-500">{{len $.Posts}} {{if eq (len $.Posts) 1}}resource{{else}}resources{{end}}<span class="hidden sm:inline"> &middot; {{$.T.LatestPost}}: <span lang="{{.Lang}}" class="text-slate-400">{{.Title}}</span></span></span>{{end}}{{end}}
+                            <h2 class="mt-1 text-lg font-bold text-white transition group-hover:text-k8s-light">{{.T.PostsCardTitle}}</h2>
+                            <p class="mt-2 text-sm text-slate-400">{{.T.PostsCardText}}</p>
+                        </div>
+                        <span class="shrink-0 font-mono text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-k8s-light" aria-hidden="true">&rarr;</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{{.Lang.Prefix}}/about" class="group flex items-center gap-4 rounded-xl border border-cluster-700 bg-cluster-900/80 backdrop-blur p-5 shadow-lg shadow-black/30 transition hover:border-k8s/60 hover:shadow-k8s/10">
+                        <div class="min-w-0 flex-1">
+                            <span class="font-mono text-xs text-emerald-300"><span class="text-slate-600">~/</span>about</span>
+                            <h2 class="mt-1 text-lg font-bold text-white transition group-hover:text-k8s-light">{{.T.AboutCardTitle}}</h2>
+                            <p class="mt-2 text-sm text-slate-400">{{.T.AboutCardText}}</p>
+                        </div>
+                        <span class="shrink-0 font-mono text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-k8s-light" aria-hidden="true">&rarr;</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="{{.Lang.Prefix}}/playground" class="group flex items-center gap-4 rounded-xl border border-cluster-700 bg-cluster-900/80 backdrop-blur p-5 shadow-lg shadow-black/30 transition hover:border-k8s/60 hover:shadow-k8s/10">
+                        <div class="min-w-0 flex-1">
+                            <span class="font-mono text-xs text-emerald-300"><span class="text-slate-600">~/</span>playground</span>
+                            <h2 class="mt-1 text-lg font-bold text-white transition group-hover:text-k8s-light">{{.T.PlayCardTitle}}</h2>
+                            <p class="mt-2 text-sm text-slate-400">{{.T.PlayCardText}}</p>
+                        </div>
+                        <span class="shrink-0 font-mono text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-k8s-light" aria-hidden="true">&rarr;</span>
+                    </a>
+                </li>
+            </ul>
+        </main>
+        {{else if .Playground}}
+        <header class="mb-10">
+            <p class="mb-6 font-mono text-sm">
+                <a href="{{.Lang.Prefix}}/" class="text-slate-500 transition hover:text-white"><span class="text-slate-600">$</span> cd <span class="text-k8s-light">~</span></a>
+            </p>
+            <h1 class="text-4xl sm:text-5xl font-extrabold text-white tracking-tight mb-4">{{.T.PlaygroundTitle}}</h1>
+            <p class="text-lg text-slate-400 max-w-2xl">{{.T.PlaygroundIntro}}</p>
         </header>
 
         <main>
@@ -182,13 +234,45 @@
                 </div>
             </section>
 
+            <section id="terminal" class="scroll-mt-8 rounded-xl border border-cluster-700 bg-cluster-900/80 backdrop-blur mb-10 overflow-hidden shadow-lg shadow-black/30">
+                <div class="flex items-center gap-2 border-b border-cluster-700 bg-cluster-800/80 px-4 py-2.5 font-mono text-xs text-slate-500">
+                    <span class="h-3 w-3 rounded-full bg-rose-500/70"></span>
+                    <span class="h-3 w-3 rounded-full bg-amber-400/70"></span>
+                    <span class="h-3 w-3 rounded-full bg-emerald-500/70"></span>
+                    <span class="ml-2 truncate">/bin/sh</span>
+                </div>
+                <div class="p-6 sm:p-8">
+                    <h2 class="text-2xl font-bold text-white mb-3">&gt;_ Terminal</h2>
+                    <p class="text-slate-400 mb-6">
+                        {{.T.TerminalIntro}}
+                    </p>
+                    <button type="button" data-terminal-open class="inline-flex items-center gap-2 whitespace-nowrap rounded-md bg-cluster-700 px-4 sm:px-5 py-2.5 font-mono text-xs sm:text-sm font-semibold text-white shadow-lg shadow-black/30 transition hover:bg-cluster-600 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:ring-offset-2 focus:ring-offset-cluster-900">
+                        &#9654; {{.T.TerminalStart}} <kbd class="text-cyan-300">~</kbd>
+                    </button>
+                </div>
+            </section>
+        </main>
+        {{else}}
+        <header class="mb-10">
+            <p class="mb-6 font-mono text-sm">
+                <a href="{{.Lang.Prefix}}/" class="text-slate-500 transition hover:text-white"><span class="text-slate-600">$</span> cd <span class="text-k8s-light">~</span></a>
+            </p>
+            <p class="font-mono text-sm text-cyan-400 mb-4">
+                <span class="text-emerald-400">patrick@cluster</span><span class="text-slate-500">:</span><span class="text-k8s-light">~</span><span class="text-slate-500">$</span>
+                <span class="text-slate-300 cursor">kubectl get posts -n blog</span>
+            </p>
+            <h1 class="text-4xl sm:text-5xl font-extrabold text-white tracking-tight mb-4">{{.T.PostsTitle}}</h1>
+            <p class="text-lg text-slate-400 max-w-2xl">{{.T.HeroIntro}}</p>
+        </header>
+
+        <main>
             {{if .Posts}}
-            <section id="posts" class="scroll-mt-8">
+            <section id="posts">
                 <div class="flex items-center justify-between mb-4 font-mono text-xs uppercase tracking-wider text-slate-500">
                     <span>{{.T.LatestPosts}}</span>
                     <span>{{len .Posts}} {{if eq (len .Posts) 1}}resource{{else}}resources{{end}}</span>
                 </div>
-                {{range .Years}}
+            {{range .Years}}
                 <h2 class="mt-8 mb-3 font-mono text-sm text-slate-500 first-of-type:mt-0"><span class="text-k8s">#</span> {{.Year}}</h2>
                 <ul class="space-y-3">
                     {{range .Posts}}
@@ -205,7 +289,7 @@
             </section>
             {{end}}
         </main>
-        {{end}}
+        {{end}}{{end}}
 
         <footer class="mt-16 border-t border-cluster-700 pt-6 font-mono text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2">
             <p>
