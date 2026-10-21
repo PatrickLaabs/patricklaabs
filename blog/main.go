@@ -516,8 +516,34 @@ func main() {
 			}
 			posts := lib.list(lang.Code)
 			data := pageData(r, lang, "/", always)
+			data["Home"] = true
+			data["Posts"] = posts
+			render(w, t, data)
+		})
+
+		mux.HandleFunc("GET "+lang.Prefix+"/posts", func(w http.ResponseWriter, r *http.Request) {
+			t, lib, ok := current(w)
+			if !ok {
+				return
+			}
+			posts := lib.list(lang.Code)
+			data := pageData(r, lang, "/posts", always)
+			data["Title"] = lang.Text.PostsTitle
+			data["Description"] = lang.Text.PostsDescription
 			data["Posts"] = posts
 			data["Years"] = groupByYear(posts)
+			render(w, t, data)
+		})
+
+		mux.HandleFunc("GET "+lang.Prefix+"/playground", func(w http.ResponseWriter, r *http.Request) {
+			t, _, ok := current(w)
+			if !ok {
+				return
+			}
+			data := pageData(r, lang, "/playground", always)
+			data["Title"] = lang.Text.PlaygroundTitle
+			data["Description"] = lang.Text.PlaygroundDescription
+			data["Playground"] = true
 			render(w, t, data)
 		})
 
