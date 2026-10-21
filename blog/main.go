@@ -400,6 +400,7 @@ var hashedAsset = regexp.MustCompile(`-[A-Z0-9]{8}\.js$`)
 func main() {
 	dev := flag.Bool("dev", false, "serve templates, posts and static files from disk and live-reload the browser on changes")
 	addr := flag.String("addr", ":8080", "address to listen on")
+	viewsFile := flag.String("views-file", os.Getenv("BLOG_VIEWS_FILE"), "file to keep page view counts in, e.g. on a persistent volume; empty keeps them in memory only")
 	flag.Parse()
 
 	// In dev mode everything is read from the working directory on every
@@ -423,6 +424,14 @@ func main() {
 		log.Fatal(err)
 	}
 	version := assetVersion(contentFS)
+
+	views, err := loadViews(*viewsFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if *viewsFile == "" {
+		log.Println("No -views-file set: page view counts are lost on restart")
+	}
 
 	static, err := fs.Sub(contentFS, "static")
 	if err != nil {
@@ -453,7 +462,7 @@ func main() {
 
 	// render executes the page template with data. In dev mode the template
 	// and posts are reloaded from disk first, so data may be built from them.
-	render := func(w http.ResponseWriter, t *template.Template, data map[string]any) {
+	render := func(w http.ResponseWriter, r *http.Request, t *template.Template, data map[string]any) {
 		data["AssetVersion"] = version
 		if *dev {
 			data["Dev"] = true
@@ -469,6 +478,7 @@ func main() {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-cache")
 		buf.WriteTo(w)
+		views.Count(r)
 	}
 
 	// current returns the template and posts to serve: the ones loaded at
@@ -518,7 +528,7 @@ func main() {
 			data := pageData(r, lang, "/", always)
 			data["Posts"] = posts
 			data["Years"] = groupByYear(posts)
-			render(w, t, data)
+			render(w, r, t, data)
 		})
 
 		mux.HandleFunc("GET "+lang.Prefix+"/posts/{slug}", func(w http.ResponseWriter, r *http.Request) {
@@ -544,7 +554,7 @@ func main() {
 				data["Canonical"] = orig.Prefix + "/posts/" + slug
 				data["OnlyIn"] = lang.OnlyInText(p.Lang)
 			}
-			render(w, t, data)
+			render(w, r, t, data)
 		})
 
 		if lang.Prefix != "" {
@@ -582,7 +592,7 @@ func main() {
 				data["Canonical"] = orig.Prefix + "/about"
 				data["OnlyIn"] = lang.OnlyInPageText(page.Lang)
 			}
-			render(w, t, data)
+			render(w, r, t, data)
 		})
 	}
 
@@ -590,6 +600,9 @@ func main() {
 	mux.HandleFunc("/healthz", probeHandler(func() bool { return true }))
 	// Readiness: templates and posts are loaded and we are not shutting down.
 	mux.HandleFunc("/readyz", probeHandler(ready.Load))
+
+	// Page view counts; protected by basic auth if BLOG_STATS_PASSWORD is set.
+	mux.HandleFunc("GET /stats", views.Handler(os.Getenv("BLOG_STATS_PASSWORD")))
 
 	mux.HandleFunc("/clicked", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -623,6 +636,14 @@ func main() {
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.ListenAndServe() }()
 
+	go func() {
+		for range time.Tick(time.Minute) {
+			if err := views.Save(); err != nil {
+				log.Println("Error saving page views:", err)
+			}
+		}
+	}()
+
 	ready.Store(true)
 	if *dev {
 		fmt.Printf("Dev server listening on http://localhost%s (live reload enabled)\n", *addr)
@@ -648,5 +669,8 @@ func main() {
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
+	}
+	if err := views.Save(); err != nil {
+		log.Println("Error saving page views:", err)
 	}
 }
