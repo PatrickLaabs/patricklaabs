@@ -2,7 +2,7 @@ TAILWIND := npx --yes tailwindcss@3.4.19 -i ./assets/input.css -o ./static/style
 PORT ?= 8080
 
 .DEFAULT_GOAL := help
-.PHONY: help dev serve css css-watch js js-watch new-post translate-post build-container
+.PHONY: help dev serve css css-watch js js-watch new-post translate-post check build-container
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -49,12 +49,16 @@ new-post: ## Create a new post: make new-post TITLE="My new post" [LANG=de]
 # hreflang links can pair them up. It starts as a copy of the original.
 translate-post: ## Start a translation of a post: make translate-post POST=readiness-vs-liveness-probes LANG=de
 	@test -n "$(POST)" -a -n "$(LANG)" || { echo 'usage: make translate-post POST=<slug> LANG=de'; exit 1; }
-	@src=$$(ls posts/????-??-??-$(POST).md 2>/dev/null | head -n1); \
+	@src=$$(ls posts/????-??-??-$(POST).md posts/????-??-??-$(POST).*.md 2>/dev/null | head -n1); \
 	test -n "$$src" || { echo "no post with slug $(POST) in posts/"; exit 1; }; \
-	file="$${src%.md}.$(LANG).md"; \
+	base=$$(echo "$$src" | sed -E 's/(\.[a-z]{2})?\.md$$//'); \
+	file="$$base$(if $(filter-out en,$(LANG)),.$(LANG)).md"; \
 	test ! -e "$$file" || { echo "$$file already exists"; exit 1; }; \
 	cp "$$src" "$$file"; \
 	echo "Created $$file, translate it there"
+
+check: ## Run the tests, including the check that every post exists in every language
+	go test ./...
 
 build-container: ## Build the container image locally with ko
 	ko build --local .
