@@ -28,6 +28,10 @@ jobs:
         with:
           go-version-file: 'blog/go.mod'
 
+      - name: Run tests (every post must exist in English and German)
+        working-directory: blog
+        run: go test ./...
+
       - name: Check for known vulnerabilities
         working-directory: blog
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
