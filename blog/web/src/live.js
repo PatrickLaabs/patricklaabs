@@ -16,6 +16,7 @@ const STATUS_STYLES = {
 	Succeeded: "text-slate-400",
 };
 const MAX_OUTPUT = 8;
+const GROUPS = { Ingress: "networking.k8s.io", GatewayClass: "gateway.networking.k8s.io", Gateway: "gateway.networking.k8s.io", HTTPRoute: "gateway.networking.k8s.io" };
 
 function el(tag, className = "", text = "") {
 	const node = document.createElement(tag);
@@ -52,14 +53,27 @@ function decorate(code, namespace) {
 	code.spellcheck = false;
 	code.setAttribute("aria-label", `Kubernetes manifest for namespace ${namespace}`);
 
+	// Requests to try go in the manifest as comments: # curl -H "x-user: ada" shop.example.com/api/users
+	const curlBar = el("div", "mt-3 hidden flex-wrap items-center gap-2");
+	const curlInput = el("input", "min-w-0 flex-1 rounded border border-cluster-600 bg-cluster-900 px-2 py-0.5 font-mono text-xs text-slate-200 focus:border-k8s focus:outline-none");
+	curlInput.setAttribute("aria-label", "curl command");
+	curlInput.spellcheck = false;
+	const curlSend = el("button", "rounded border border-cluster-600 px-2 py-0.5 text-cyan-300 transition hover:border-k8s hover:text-white", "▶ curl");
+	curlSend.type = "button";
+	curlSend.addEventListener("click", () => send(curlInput.value));
+	curlInput.addEventListener("keydown", (event) => {
+		if (event.key === "Enter") send(curlInput.value);
+	});
+	const curlPresets = el("div", "flex w-full flex-wrap gap-2");
+	curlBar.append(el("span", "text-slate-500", "$ curl"), curlInput, curlSend, curlPresets);
 	const output = el("div", "hidden border-t border-cluster-700 px-4 py-3 font-mono text-xs leading-5");
 	const log = el("ol", "m-0 list-none space-y-0.5 p-0");
 	const resources = el("div", "mt-3 hidden overflow-x-auto");
 	const hint = el("p", "mb-0 mt-3 hidden text-slate-600", `Inspect it in the terminal: press ~ and run  kubectl get all -n ${namespace}`);
-	output.append(log, resources, hint);
+	output.append(log, resources, curlBar, hint);
 	wrapper.append(bar, pre, output);
 
-	const state = { cluster: null, m: null, pods: new Map(), services: new Map(), watching: false, applied: false, ticker: null };
+	const state = { cluster: null, m: null, pods: new Map(), services: new Map(), watching: false, applied: false, ticker: null, edge: null, requests: [] };
 
 	function print(text, className = "text-slate-300") {
 		log.append(el("li", `whitespace-pre-wrap break-words pl-0 ${className}`, text));
@@ -104,7 +118,83 @@ function decorate(code, namespace) {
 			}
 			resources.append(line);
 		}
+		for (const obj of state.edge ? routingObjects() : []) {
+			const line = el("div", "mt-3 flex flex-wrap items-center gap-2");
+			line.append(el("span", "text-slate-500", `${obj.kind.toLowerCase()}/${obj.metadata.name}`));
+			if (obj.kind === "Ingress") {
+				const hosts = (obj.spec?.rules ?? []).map((r) => r.host ?? "*").join(",") || "*";
+				line.append(el("span", "text-slate-400", `class: ${obj.spec?.ingressClassName ?? obj.metadata.annotations?.["kubernetes.io/ingress.class"] ?? "<none>"}  hosts: ${hosts}`));
+			} else if (obj.kind === "Gateway") {
+				const status = m.gatewayStatusOf(obj);
+				line.append(el("span", "text-slate-400", `class: ${obj.spec?.gatewayClassName ?? "<none>"}`), el("span", status.programmed ? "text-emerald-300" : "text-rose-300", `Programmed: ${status.programmed ? "True" : `False (${status.message})`}`));
+			} else if (obj.kind === "HTTPRoute") {
+				line.append(el("span", "text-slate-400", `hostnames: ${(obj.spec?.hostnames ?? ["*"]).join(",")}`));
+				for (const parent of m.routeStatus(obj)) {
+					line.append(el("span", parent.accepted ? "text-emerald-300" : "text-rose-300", `parent ${parent.name}: Accepted ${parent.accepted ? "True" : `False (${parent.reason})`}`));
+				}
+			}
+			resources.append(line);
+		}
 		resources.classList.toggle("hidden", !resources.childElementCount);
+	}
+
+	function routingObjects() {
+		const order = ["Gateway", "HTTPRoute", "Ingress"];
+		return order.flatMap((kind) => state.m.listRouting(kind, namespace).sort((a, b) => a.metadata.name.localeCompare(b.metadata.name)));
+	}
+
+	// parseCurl understands the small part of curl the posts need:
+	// -H "Name: value" headers and a URL with or without http://.
+	function parseCurl(command) {
+		const tokens = command.match(/"[^"]*"|'[^']*'|\S+/g)?.map((t) => t.replace(/^(["'])(.*)\1$/, "$2")) ?? [];
+		const headers = {};
+		let target;
+		for (let i = 0; i < tokens.length; i++) {
+			if (tokens[i] === "curl") continue;
+			if (tokens[i] === "-H" || tokens[i] === "--header") {
+				const [name, ...value] = (tokens[++i] ?? "").split(":");
+				if (name) headers[name.trim()] = value.join(":").trim();
+			} else if (!tokens[i].startsWith("-")) {
+				target = tokens[i];
+			}
+		}
+		if (!target) return undefined;
+		const url = new URL(/^https?:\/\//.test(target) ? target : `http://${target}`);
+		return { host: url.host, path: `${url.pathname}${url.search}`, headers };
+	}
+
+	async function send(command) {
+		const req = parseCurl(command.trim());
+		print(`$ curl ${command.trim()}`, "text-slate-500");
+		if (!req) {
+			print("curl: no URL specified!", "text-rose-300");
+			return;
+		}
+		const { nodePort } = state.m.EDGES[state.edge];
+		try {
+			const response = await state.cluster.fetch(`http://node-1:${nodePort}${req.path}`, { headers: { ...req.headers, Host: req.host, [state.m.SCOPE_HEADER]: namespace } });
+			const body = String(response.body ?? "").trim();
+			const ok = response.status < 400;
+			print(`HTTP ${response.status}${body ? `  ${body}` : ""}`, ok ? "text-slate-300" : "text-rose-300");
+		} catch {
+			print(`curl: (7) Failed to connect to ${req.host}: the ${state.edge === "ingress" ? "ingress controller" : "gateway"} is not ready yet`, "text-rose-300");
+		}
+	}
+
+	function renderCurl() {
+		curlPresets.replaceChildren();
+		for (const command of state.requests) {
+			const preset = el("button", "rounded border border-cluster-700 px-2 py-0.5 text-slate-400 transition hover:border-k8s hover:text-white", command);
+			preset.type = "button";
+			preset.addEventListener("click", () => {
+				curlInput.value = command;
+				send(command);
+			});
+			curlPresets.append(preset);
+		}
+		if (!curlInput.value || !state.requests.includes(curlInput.value)) curlInput.value = state.requests[0] ?? "";
+		curlBar.classList.toggle("hidden", !state.edge);
+		curlBar.classList.toggle("flex", Boolean(state.edge));
 	}
 
 	async function request(name, nodePort) {
@@ -145,7 +235,7 @@ function decorate(code, namespace) {
 		if (!docs.length) throw new Error("no objects passed to apply");
 		for (const doc of docs) {
 			if (!doc.kind || !doc.metadata?.name) throw new Error("every object needs a kind and metadata.name");
-			if (doc.kind !== "Namespace") doc.metadata.namespace = namespace;
+			if (!["Namespace", "GatewayClass", "IngressClass"].includes(doc.kind)) doc.metadata.namespace = namespace;
 		}
 		return [{ apiVersion: "v1", kind: "Namespace", metadata: { name: namespace } }, ...docs];
 	}
@@ -162,14 +252,33 @@ function decorate(code, namespace) {
 				print(`error: error parsing manifest: ${err.message}`, "text-rose-300");
 				return;
 			}
+			let routing;
 			try {
-				await state.cluster.apply(objects);
+				routing = objects.filter((obj) => state.m.routingKind(obj));
+			} catch (err) {
+				print(`error: ${err.message}`, "text-rose-300");
+				return;
+			}
+			const core = objects.filter((obj) => !routing.includes(obj));
+			const verbs = new Map();
+			try {
+				await state.cluster.apply(core);
+				for (const obj of routing) verbs.set(obj, state.m.applyRouting(obj));
 			} catch (err) {
 				print(`error: ${err?.message ?? err}`, "text-rose-300");
 				return;
 			}
 			const verb = state.applied ? "configured" : "created";
-			for (const obj of objects.slice(1)) print(`${obj.kind.toLowerCase()}/${obj.metadata.name} ${verb}`, "text-emerald-300");
+			for (const obj of objects.slice(1)) {
+				const group = GROUPS[obj.kind] ? `.${GROUPS[obj.kind]}` : "";
+				print(`${obj.kind.toLowerCase()}${group}/${obj.metadata.name} ${verbs.get(obj) ?? verb}`, "text-emerald-300");
+			}
+			if (routing.length) {
+				state.edge = routing.some((obj) => obj.kind !== "Ingress" && obj.kind !== "IngressClass") ? "gateway" : "ingress";
+				state.requests = [...code.textContent.matchAll(/^\s*#\s*curl\s+(.+)$/gm)].map((match) => match[1].trim());
+				await state.m.ensureEdge(state.cluster, state.edge);
+				renderCurl();
+			}
 			state.applied = true;
 			reset.disabled = false;
 			hint.classList.remove("hidden");
@@ -186,6 +295,7 @@ function decorate(code, namespace) {
 		reset.disabled = apply.disabled = true;
 		print(`$ kubectl delete namespace ${namespace}`, "text-slate-500");
 		try {
+			state.m.deleteRoutingNamespace(namespace);
 			await state.cluster.api.corev1.deleteNamespace({ name: namespace });
 			// Wait for the namespace controller to clean up so a re-apply starts fresh.
 			for (let i = 0; i < 100; i++) {
