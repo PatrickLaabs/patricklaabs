@@ -1,58 +1,26 @@
 package main
 
 import (
-	"crypto/subtle"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io/fs"
 	"net/http"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
-	"time"
 )
 
-// Views counts page views without storing anything about the visitor: no
-// cookies, no IP addresses, no user agents. Only the path of each rendered
-// page and the number of views per day are kept.
+// Views counts page views in memory, from the start of the process, without
+// storing anything about the visitor: no cookies, no IP addresses, no user
+// agents. Only the path of each rendered page is kept, and the counts are
+// gone when the pod restarts.
 type Views struct {
-	mu    sync.Mutex
-	file  string // where the counts are saved; empty keeps them in memory
-	dirty bool
-	data  viewData
+	mu     sync.Mutex
+	pages  map[string]int64 // views per path, like /de/posts/hello-world
+	total  int64
+	logged int64 // total at the last summary
 }
 
-type viewData struct {
-	Pages map[string]int64 `json:"pages"` // views per path, like /de/posts/hello-world
-	Days  map[string]int64 `json:"days"`  // views per UTC day, like 2026-10-21
-}
-
-// loadViews reads the counts saved in file. A missing file starts from zero.
-func loadViews(file string) (*Views, error) {
-	v := &Views{file: file, data: viewData{Pages: map[string]int64{}, Days: map[string]int64{}}}
-	if file == "" {
-		return v, nil
-	}
-	b, err := os.ReadFile(file)
-	if errors.Is(err, fs.ErrNotExist) {
-		return v, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	if err := json.Unmarshal(b, &v.data); err != nil {
-		return nil, fmt.Errorf("%s: %w", file, err)
-	}
-	if v.data.Pages == nil {
-		v.data.Pages = map[string]int64{}
-	}
-	if v.data.Days == nil {
-		v.data.Days = map[string]int64{}
-	}
-	return v, nil
+func newViews() *Views {
+	return &Views{pages: map[string]int64{}}
 }
 
 // botAgents match user agents of crawlers, link previews and uptime checks,
@@ -79,100 +47,43 @@ func (v *Views) Count(r *http.Request) {
 	if r.Method != http.MethodGet || isBot(r.UserAgent()) {
 		return
 	}
-	day := time.Now().UTC().Format(time.DateOnly)
 	v.mu.Lock()
-	v.data.Pages[r.URL.Path]++
-	v.data.Days[day]++
-	v.dirty = true
+	v.pages[r.URL.Path]++
+	v.total++
 	v.mu.Unlock()
 }
 
-// Save writes the counts to the file if they changed since the last save.
-// It writes a temporary file first, so a crash never leaves a broken file.
-func (v *Views) Save() error {
-	if v.file == "" {
-		return nil
-	}
+// Summary returns one log line with the views since the process started,
+// the views since the previous summary and the most viewed pages. It
+// returns "" if nothing was viewed since the previous summary.
+func (v *Views) Summary(top int) string {
 	v.mu.Lock()
-	if !v.dirty {
-		v.mu.Unlock()
-		return nil
+	defer v.mu.Unlock()
+	if v.total == v.logged {
+		return ""
 	}
-	b, err := json.MarshalIndent(v.data, "", "  ")
-	v.dirty = false
-	v.mu.Unlock()
-	if err != nil {
-		return err
+	type row struct {
+		path string
+		n    int64
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(v.file), ".views-*.json")
-	if err == nil {
-		_, err = tmp.Write(b)
-		if cerr := tmp.Close(); err == nil {
-			err = cerr
-		}
-		if err == nil {
-			err = os.Rename(tmp.Name(), v.file)
-		}
-		if err != nil {
-			os.Remove(tmp.Name())
-		}
+	rows := make([]row, 0, len(v.pages))
+	for p, n := range v.pages {
+		rows = append(rows, row{p, n})
 	}
-	if err != nil {
-		v.mu.Lock()
-		v.dirty = true
-		v.mu.Unlock()
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].n != rows[j].n {
+			return rows[i].n > rows[j].n
+		}
+		return rows[i].path < rows[j].path
+	})
+	if len(rows) > top {
+		rows = rows[:top]
 	}
-	return err
-}
-
-// Handler serves the counts as plain text: the total, the last 30 days and
-// every page, most viewed first. If password is set, it is required via
-// HTTP basic auth (any user name).
-func (v *Views) Handler(password string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if password != "" {
-			_, pass, _ := r.BasicAuth()
-			if subtle.ConstantTimeCompare([]byte(pass), []byte(password)) != 1 {
-				w.Header().Set("WWW-Authenticate", `Basic realm="stats"`)
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
-				return
-			}
-		}
-		type row struct {
-			key string
-			n   int64
-		}
-		v.mu.Lock()
-		var total int64
-		pages := make([]row, 0, len(v.data.Pages))
-		for k, n := range v.data.Pages {
-			pages = append(pages, row{k, n})
-			total += n
-		}
-		days := make([]row, 0, 30)
-		today := time.Now().UTC()
-		for i := range 30 {
-			d := today.AddDate(0, 0, -i).Format(time.DateOnly)
-			days = append(days, row{d, v.data.Days[d]})
-		}
-		v.mu.Unlock()
-		sort.Slice(pages, func(i, j int) bool {
-			if pages[i].n != pages[j].n {
-				return pages[i].n > pages[j].n
-			}
-			return pages[i].key < pages[j].key
-		})
-
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.Header().Set("Cache-Control", "no-store")
-		w.Header().Set("X-Robots-Tag", "noindex")
-		fmt.Fprintf(w, "Page views: %d\n\nLast 30 days (UTC)\n", total)
-		for _, d := range days {
-			fmt.Fprintf(w, "  %s  %8d\n", d.key, d.n)
-		}
-		fmt.Fprintln(w, "\nPages")
-		for _, p := range pages {
-			fmt.Fprintf(w, "  %8d  %s\n", p.n, p.key)
-		}
+	var b strings.Builder
+	fmt.Fprintf(&b, "Page views since start: %d (+%d since last summary); top:", v.total, v.total-v.logged)
+	for _, r := range rows {
+		fmt.Fprintf(&b, " %s=%d", r.path, r.n)
 	}
+	v.logged = v.total
+	return b.String()
 }

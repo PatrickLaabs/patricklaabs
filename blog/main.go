@@ -400,7 +400,7 @@ var hashedAsset = regexp.MustCompile(`-[A-Z0-9]{8}\.js$`)
 func main() {
 	dev := flag.Bool("dev", false, "serve templates, posts and static files from disk and live-reload the browser on changes")
 	addr := flag.String("addr", ":8080", "address to listen on")
-	viewsFile := flag.String("views-file", os.Getenv("BLOG_VIEWS_FILE"), "file to keep page view counts in, e.g. on a persistent volume; empty keeps them in memory only")
+	viewsEvery := flag.Duration("views-log-interval", time.Hour, "how often to log a summary of the page views since start")
 	flag.Parse()
 
 	// In dev mode everything is read from the working directory on every
@@ -425,13 +425,7 @@ func main() {
 	}
 	version := assetVersion(contentFS)
 
-	views, err := loadViews(*viewsFile)
-	if err != nil {
-		log.Fatal(err)
-	}
-	if *viewsFile == "" {
-		log.Println("No -views-file set: page view counts are lost on restart")
-	}
+	views := newViews()
 
 	static, err := fs.Sub(contentFS, "static")
 	if err != nil {
@@ -627,9 +621,6 @@ func main() {
 	// Readiness: templates and posts are loaded and we are not shutting down.
 	mux.HandleFunc("/readyz", probeHandler(ready.Load))
 
-	// Page view counts; protected by basic auth if BLOG_STATS_PASSWORD is set.
-	mux.HandleFunc("GET /stats", views.Handler(os.Getenv("BLOG_STATS_PASSWORD")))
-
 	mux.HandleFunc("/clicked", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprint(w, `<div class="rounded-lg border border-emerald-500/30 bg-cluster-950 p-4 font-mono text-sm"><p class="text-emerald-300">deployment.apps/blog configured</p><p class="mt-1 text-slate-500"># Loaded dynamically via HTMX &mdash; no full page reload.</p></div>`)
@@ -662,11 +653,16 @@ func main() {
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.ListenAndServe() }()
 
+	// Page views are only counted in memory; a summary in the log is all
+	// there is to see of them.
+	logViews := func() {
+		if s := views.Summary(10); s != "" {
+			log.Println(s)
+		}
+	}
 	go func() {
-		for range time.Tick(time.Minute) {
-			if err := views.Save(); err != nil {
-				log.Println("Error saving page views:", err)
-			}
+		for range time.Tick(*viewsEvery) {
+			logViews()
 		}
 	}()
 
@@ -696,7 +692,5 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}
-	if err := views.Save(); err != nil {
-		log.Println("Error saving page views:", err)
-	}
+	logViews()
 }

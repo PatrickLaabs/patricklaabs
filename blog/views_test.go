@@ -1,20 +1,16 @@
 package main
 
 import (
-	"net/http"
 	"net/http/httptest"
-	"path/filepath"
-	"strings"
 	"testing"
 )
 
 const browserAgent = "Mozilla/5.0 (X11; Linux x86_64) Firefox/140.0"
 
-func TestViewsCountAndSave(t *testing.T) {
-	file := filepath.Join(t.TempDir(), "views.json")
-	v, err := loadViews(file)
-	if err != nil {
-		t.Fatal(err)
+func TestViewsSummary(t *testing.T) {
+	v := newViews()
+	if got := v.Summary(10); got != "" {
+		t.Errorf("summary without views = %q, want empty", got)
 	}
 	for _, c := range []struct{ method, path, agent string }{
 		{"GET", "/", browserAgent},
@@ -22,43 +18,27 @@ func TestViewsCountAndSave(t *testing.T) {
 		{"GET", "/de/posts/hello-world", browserAgent},
 		{"HEAD", "/", browserAgent},
 		{"GET", "/", "Googlebot/2.1"},
+		{"GET", "/", "kube-probe/1.34"},
 		{"GET", "/", ""},
 	} {
 		r := httptest.NewRequest(c.method, c.path, nil)
 		r.Header.Set("User-Agent", c.agent)
 		v.Count(r)
 	}
-	if err := v.Save(); err != nil {
-		t.Fatal(err)
+
+	want := "Page views since start: 3 (+3 since last summary); top: /de/posts/hello-world=2 /=1"
+	if got := v.Summary(10); got != want {
+		t.Errorf("summary = %q, want %q", got, want)
+	}
+	if got := v.Summary(10); got != "" {
+		t.Errorf("summary without new views = %q, want empty", got)
 	}
 
-	loaded, err := loadViews(file)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := loaded.data.Pages["/"]; got != 1 {
-		t.Errorf("views of / = %d, want 1", got)
-	}
-	if got := loaded.data.Pages["/de/posts/hello-world"]; got != 2 {
-		t.Errorf("views of /de/posts/hello-world = %d, want 2", got)
-	}
-}
-
-func TestViewsHandlerPassword(t *testing.T) {
-	v, _ := loadViews("")
-	h := v.Handler("secret")
-
-	w := httptest.NewRecorder()
-	h(w, httptest.NewRequest("GET", "/stats", nil))
-	if w.Code != http.StatusUnauthorized {
-		t.Fatalf("without password: status %d, want 401", w.Code)
-	}
-
-	r := httptest.NewRequest("GET", "/stats", nil)
-	r.SetBasicAuth("patrick", "secret")
-	w = httptest.NewRecorder()
-	h(w, r)
-	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Page views: 0") {
-		t.Fatalf("with password: status %d, body %q", w.Code, w.Body.String())
+	r := httptest.NewRequest("GET", "/about", nil)
+	r.Header.Set("User-Agent", browserAgent)
+	v.Count(r)
+	want = "Page views since start: 4 (+1 since last summary); top: /de/posts/hello-world=2"
+	if got := v.Summary(1); got != want {
+		t.Errorf("summary = %q, want %q", got, want)
 	}
 }
