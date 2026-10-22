@@ -3,7 +3,7 @@
 
 const PROMPT = "patrick@cluster:~$ ";
 const KUBECTL_COMMANDS = ["get", "delete", "scale", "logs", "exec", "describe", "apply", "top", "version", "cluster-info"];
-const RESOURCES = ["pods", "nodes", "deployments", "replicasets", "services", "events", "namespaces", "all"];
+const RESOURCES = ["pods", "nodes", "deployments", "replicasets", "services", "events", "namespaces", "ingresses", "ingressclasses", "gateways", "gatewayclasses", "httproutes", "all"];
 const RESOURCE_ALIASES = {
 	po: "pods", pod: "pods", pods: "pods",
 	no: "nodes", node: "nodes", nodes: "nodes",
@@ -12,6 +12,11 @@ const RESOURCE_ALIASES = {
 	svc: "services", service: "services", services: "services",
 	ev: "events", event: "events", events: "events",
 	ns: "namespaces", namespace: "namespaces", namespaces: "namespaces",
+	ing: "ingresses", ingress: "ingresses", ingresses: "ingresses",
+	ingressclass: "ingressclasses", ingressclasses: "ingressclasses",
+	gtw: "gateways", gateway: "gateways", gateways: "gateways",
+	gc: "gatewayclasses", gatewayclass: "gatewayclasses", gatewayclasses: "gatewayclasses",
+	httproute: "httproutes", httproutes: "httproutes",
 	all: "all",
 };
 const PROTECTED_NAMESPACES = ["blog", "kube-system", "default"];
@@ -259,6 +264,37 @@ function createTerminal() {
 		if (resource === "namespaces") {
 			const namespaces = filter((await c.api.corev1.listNamespace()).items);
 			show([["NAME", "STATUS", "AGE"], ...namespaces.map((ns) => [ns.metadata.name, ns.status?.phase ?? "Active", m.age(ns.metadata.creationTimestamp)])]);
+		}
+		const routing = (kind) => filter(m.listRouting(kind, flags.allNamespaces ? undefined : namespace));
+		if (resource === "ingresses") {
+			const rows = [header(["NAME", "CLASS", "HOSTS", "ADDRESS", "PORTS", "AGE"])];
+			for (const ing of routing("Ingress")) {
+				const hosts = (ing.spec?.rules ?? []).map((r) => r.host ?? "*").join(",") || "*";
+				rows.push(withNs([ing.metadata.name, ing.spec?.ingressClassName ?? "<none>", hosts, "node-1", "80", m.age(ing.metadata.creationTimestamp)], ing));
+			}
+			show(rows);
+		}
+		if (resource === "ingressclasses") {
+			show([["NAME", "CONTROLLER", "PARAMETERS", "AGE"], ...routing("IngressClass").map((ic) => [ic.metadata.name, ic.spec.controller, "<none>", m.age(ic.metadata.creationTimestamp)])]);
+		}
+		if (resource === "gatewayclasses") {
+			show([["NAME", "CONTROLLER", "ACCEPTED", "AGE"], ...routing("GatewayClass").map((gc) => [gc.metadata.name, gc.spec.controllerName, "True", m.age(gc.metadata.creationTimestamp)])]);
+		}
+		if (resource === "gateways") {
+			const rows = [header(["NAME", "CLASS", "ADDRESS", "PROGRAMMED", "AGE"])];
+			for (const gw of routing("Gateway")) {
+				const status = m.gatewayStatusOf(gw);
+				rows.push(withNs([gw.metadata.name, gw.spec?.gatewayClassName ?? "", status.programmed ? "node-1" : "", status.programmed ? "True" : "False", m.age(gw.metadata.creationTimestamp)], gw));
+			}
+			show(rows);
+		}
+		if (resource === "httproutes") {
+			const rows = [header(["NAME", "HOSTNAMES", "ACCEPTED", "AGE"])];
+			for (const route of routing("HTTPRoute")) {
+				const accepted = m.routeStatus(route).map((p) => (p.accepted ? "True" : `False (${p.reason})`)).join(",");
+				rows.push(withNs([route.metadata.name, JSON.stringify(route.spec?.hostnames ?? []), accepted, m.age(route.metadata.creationTimestamp)], route));
+			}
+			show(rows);
 		}
 		if (resource === "events") {
 			const events = await list((r) => c.api.corev1.listNamespacedEvent(r), () => c.api.corev1.listEventForAllNamespaces());

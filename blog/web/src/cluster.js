@@ -1,6 +1,9 @@
 // A simulated Kubernetes cluster running this blog, powered by webernetes.
 // Everything here runs in the visitor's browser; nothing talks to a backend.
 import { BaseImage, Cluster } from "@ngrok/webernetes";
+import { EDGES, edgeImages, edgeManifests } from "./gateway.js";
+
+export { EDGES, SCOPE_HEADER, applyRouting, deleteRoutingNamespace, gatewayStatusOf, listRouting, routeStatus, routingKind, subscribe as subscribeRouting } from "./gateway.js";
 
 export const NAMESPACE = "blog";
 export const DEPLOYMENT = "blog";
@@ -175,6 +178,59 @@ class DeadlockImage extends BaseImage {
 	}
 }
 
+// Storefront is the shop's web frontend, in two versions for canary demos.
+function storefrontImage(version) {
+	return class extends BaseImage {
+		static imageName = "patricklaabs/storefront";
+		static imageVersion = `${version}.0`;
+		defaultCommand = ["server"];
+
+		async exec(ctx, argv) {
+			if (argv[0] !== "server") {
+				return await super.exec(ctx, argv);
+			}
+			log(ctx, `storefront v${version} listening on :8080`);
+			ctx.listenHttp(8080, async (_requestCtx, request) => {
+				log(ctx, `GET ${request.url.pathname} 200`);
+				return { status: 200, body: `storefront v${version} (${ctx.pod.name}) got GET ${request.url.pathname}\n` };
+			});
+			return await ctx.waitUntilKilled();
+		}
+	};
+}
+
+// ShopAPIImage only knows its own routes. Anything else is a 404, which makes
+// a missing path rewrite in front of it easy to spot.
+class ShopAPIImage extends BaseImage {
+	static imageName = "patricklaabs/shop-api";
+	static imageVersion = "1.0";
+	defaultCommand = ["server"];
+
+	async exec(ctx, argv) {
+		if (argv[0] !== "server") {
+			return await super.exec(ctx, argv);
+		}
+		const routes = {
+			"/users": '[{"id":1,"name":"Ada"},{"id":2,"name":"Grace"}]',
+			"/orders": '[{"id":42,"user":1,"total":"13.37"}]',
+			"/healthz": "ok",
+		};
+		log(ctx, "shop-api listening on :8080");
+		ctx.listenHttp(8080, async (_requestCtx, request) => {
+			const path = request.url.pathname;
+			const body = routes[path];
+			const user = Object.entries(request.header).find(([name]) => name.toLowerCase() === "x-user")?.[1]?.[0];
+			if (body === undefined) {
+				log(ctx, `GET ${path} 404`);
+				return { status: 404, body: `404 page not found (shop-api got GET ${path})\n` };
+			}
+			log(ctx, `GET ${path} 200`);
+			return { status: 200, body: `${body}  (shop-api, ${ctx.pod.name}${user ? `, x-user: ${user}` : ""})\n` };
+		});
+		return await ctx.waitUntilKilled();
+	}
+}
+
 function manifests(replicas) {
 	return [
 		{ apiVersion: "v1", kind: "Namespace", metadata: { name: NAMESPACE } },
@@ -222,7 +278,7 @@ let booting;
 export function bootCluster({ replicas = 3 } = {}) {
 	booting ??= (async () => {
 		const cluster = new Cluster();
-		for (const image of [BlogImage, NginxImage, BusyboxImage, CrashLoopImage, SlowStartImage, DeadlockImage]) {
+		for (const image of [BlogImage, NginxImage, BusyboxImage, CrashLoopImage, SlowStartImage, DeadlockImage, storefrontImage(1), storefrontImage(2), ShopAPIImage, ...edgeImages(log)]) {
 			cluster.registerImage(image);
 		}
 		await cluster.init();
@@ -237,6 +293,28 @@ export function bootCluster({ replicas = 3 } = {}) {
 		return cluster;
 	})();
 	return booting;
+}
+
+const edges = new Map();
+
+// ensureEdge installs the ingress-nginx or Gateway API proxy the first time a
+// live manifest needs it and waits until it serves traffic.
+export function ensureEdge(cluster, edge) {
+	if (!edges.has(edge)) {
+		edges.set(
+			edge,
+			(async () => {
+				await cluster.apply(edgeManifests(edge));
+				const { namespace } = EDGES[edge];
+				for (let i = 0; i < 100; i++) {
+					const pods = await cluster.api.corev1.listNamespacedPod({ namespace });
+					if (pods.items.some((p) => podStatus(p) === "Running")) return;
+					await new Promise((resolve) => setTimeout(resolve, 100));
+				}
+			})(),
+		);
+	}
+	return edges.get(edge);
 }
 
 export async function killPod(cluster, name) {
