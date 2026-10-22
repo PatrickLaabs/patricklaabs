@@ -400,6 +400,8 @@ var hashedAsset = regexp.MustCompile(`-[A-Z0-9]{8}\.js$`)
 func main() {
 	dev := flag.Bool("dev", false, "serve templates, posts and static files from disk and live-reload the browser on changes")
 	addr := flag.String("addr", ":8080", "address to listen on")
+	viewsEvery := flag.Duration("views-log-interval", time.Hour, "how often to log a summary of the page views")
+	valkeyAddr := flag.String("valkey", os.Getenv("BLOG_VALKEY_ADDR"), "host:port of a Valkey server to add up page views in; empty keeps them in memory only")
 	flag.Parse()
 
 	// In dev mode everything is read from the working directory on every
@@ -423,6 +425,9 @@ func main() {
 		log.Fatal(err)
 	}
 	version := assetVersion(contentFS)
+
+	views := newViews(*valkeyAddr)
+	defer views.Close()
 
 	static, err := fs.Sub(contentFS, "static")
 	if err != nil {
@@ -453,7 +458,7 @@ func main() {
 
 	// render executes the page template with data. In dev mode the template
 	// and posts are reloaded from disk first, so data may be built from them.
-	render := func(w http.ResponseWriter, t *template.Template, data map[string]any) {
+	render := func(w http.ResponseWriter, r *http.Request, t *template.Template, data map[string]any) {
 		data["AssetVersion"] = version
 		if *dev {
 			data["Dev"] = true
@@ -469,6 +474,7 @@ func main() {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-cache")
 		buf.WriteTo(w)
+		views.Count(r)
 	}
 
 	// current returns the template and posts to serve: the ones loaded at
@@ -518,7 +524,7 @@ func main() {
 			data := pageData(r, lang, "/", always)
 			data["Home"] = true
 			data["Posts"] = posts
-			render(w, t, data)
+			render(w, r, t, data)
 		})
 
 		mux.HandleFunc("GET "+lang.Prefix+"/posts", func(w http.ResponseWriter, r *http.Request) {
@@ -532,7 +538,7 @@ func main() {
 			data["Description"] = lang.Text.PostsDescription
 			data["Posts"] = posts
 			data["Years"] = groupByYear(posts)
-			render(w, t, data)
+			render(w, r, t, data)
 		})
 
 		mux.HandleFunc("GET "+lang.Prefix+"/playground", func(w http.ResponseWriter, r *http.Request) {
@@ -544,7 +550,7 @@ func main() {
 			data["Title"] = lang.Text.PlaygroundTitle
 			data["Description"] = lang.Text.PlaygroundDescription
 			data["Playground"] = true
-			render(w, t, data)
+			render(w, r, t, data)
 		})
 
 		mux.HandleFunc("GET "+lang.Prefix+"/posts/{slug}", func(w http.ResponseWriter, r *http.Request) {
@@ -570,7 +576,7 @@ func main() {
 				data["Canonical"] = orig.Prefix + "/posts/" + slug
 				data["OnlyIn"] = lang.OnlyInText(p.Lang)
 			}
-			render(w, t, data)
+			render(w, r, t, data)
 		})
 
 		if lang.Prefix != "" {
@@ -608,7 +614,7 @@ func main() {
 				data["Canonical"] = orig.Prefix + "/about"
 				data["OnlyIn"] = lang.OnlyInPageText(page.Lang)
 			}
-			render(w, t, data)
+			render(w, r, t, data)
 		})
 	}
 
@@ -649,6 +655,35 @@ func main() {
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.ListenAndServe() }()
 
+	// Page views are added up in Valkey every few seconds, if it is used;
+	// a summary in the log is all there is to see of them.
+	flushViews := func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := views.Flush(ctx); err != nil {
+			log.Println("Error saving page views in Valkey:", err)
+		}
+	}
+	logViews := func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if s := views.Summary(ctx, 10); s != "" {
+			log.Println(s)
+		}
+	}
+	go func() {
+		flush, summary := time.Tick(10*time.Second), time.Tick(*viewsEvery)
+		for {
+			select {
+			case <-flush:
+				flushViews()
+			case <-summary:
+				flushViews()
+				logViews()
+			}
+		}
+	}()
+
 	ready.Store(true)
 	if *dev {
 		fmt.Printf("Dev server listening on http://localhost%s (live reload enabled)\n", *addr)
@@ -675,4 +710,6 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}
+	flushViews()
+	logViews()
 }
