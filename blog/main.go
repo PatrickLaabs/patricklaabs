@@ -400,7 +400,8 @@ var hashedAsset = regexp.MustCompile(`-[A-Z0-9]{8}\.js$`)
 func main() {
 	dev := flag.Bool("dev", false, "serve templates, posts and static files from disk and live-reload the browser on changes")
 	addr := flag.String("addr", ":8080", "address to listen on")
-	viewsEvery := flag.Duration("views-log-interval", time.Hour, "how often to log a summary of the page views since start")
+	viewsEvery := flag.Duration("views-log-interval", time.Hour, "how often to log a summary of the page views")
+	valkeyAddr := flag.String("valkey", os.Getenv("BLOG_VALKEY_ADDR"), "host:port of a Valkey server to add up page views in; empty keeps them in memory only")
 	flag.Parse()
 
 	// In dev mode everything is read from the working directory on every
@@ -425,7 +426,8 @@ func main() {
 	}
 	version := assetVersion(contentFS)
 
-	views := newViews()
+	views := newViews(*valkeyAddr)
+	defer views.Close()
 
 	static, err := fs.Sub(contentFS, "static")
 	if err != nil {
@@ -653,16 +655,32 @@ func main() {
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.ListenAndServe() }()
 
-	// Page views are only counted in memory; a summary in the log is all
-	// there is to see of them.
+	// Page views are added up in Valkey every few seconds, if it is used;
+	// a summary in the log is all there is to see of them.
+	flushViews := func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := views.Flush(ctx); err != nil {
+			log.Println("Error saving page views in Valkey:", err)
+		}
+	}
 	logViews := func() {
-		if s := views.Summary(10); s != "" {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if s := views.Summary(ctx, 10); s != "" {
 			log.Println(s)
 		}
 	}
 	go func() {
-		for range time.Tick(*viewsEvery) {
-			logViews()
+		flush, summary := time.Tick(10*time.Second), time.Tick(*viewsEvery)
+		for {
+			select {
+			case <-flush:
+				flushViews()
+			case <-summary:
+				flushViews()
+				logViews()
+			}
 		}
 	}()
 
@@ -692,5 +710,6 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal(err)
 	}
+	flushViews()
 	logViews()
 }
