@@ -43,7 +43,7 @@ new-post: ## Create a new post: make new-post TITLE="My new post" [LANG=de]
 	file="posts/$$(date +%Y-%m-%d)-$$slug$(if $(filter-out en,$(LANG)),.$(LANG)).md"; \
 	test ! -e "$$file" || { echo "$$file already exists"; exit 1; }; \
 	printf '# %s\n\nWrite your post here.\n' "$(TITLE)" > "$$file"; \
-	echo "Created $$file"
+	echo "Created $$file. Read WRITING.md before you start writing."
 
 # A translation shares the original's slug, so the language switcher and the
 # hreflang links can pair them up. It starts as a copy of the original.
