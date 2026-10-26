@@ -1,14 +1,36 @@
 # From ingress-nginx to Gateway API, live
 
-ingress-nginx is retired. SIG Network announced it in [November 2025](https://kubernetes.io/blog/2025/11/11/ingress-nginx-retirement/), best-effort maintenance ended in March 2026, and since then there have been no releases, no bug fixes and no security patches. The tricky part: nothing broke. Existing installations keep running, so in many clusters the most exposed component, the one that terminates every request from the internet, is now unmaintained without anyone noticing.
+ingress-nginx, the most widely used way to route web traffic into Kubernetes, gets no more security patches. This post shows step by step, live in your browser, how to move a small shop to its successor, Gateway API, and which pitfalls to watch for.
 
-The Ingress *API* isn't going anywhere, only this controller is. You could switch to another Ingress controller, but your `nginx.ingress.kubernetes.io/*` annotations won't come along, and the Ingress API is feature-frozen anyway. If you're rewriting your routing config, you might as well rewrite it for [Gateway API](https://gateway-api.sigs.k8s.io/).
+## Why this matters
 
-This post walks through that migration with a small shop: a storefront and an API behind one hostname. As in the [probes post](/posts/readiness-vs-liveness-probes), every manifest runs on a simulated cluster in your browser. Hit **▶ kubectl apply**, then send requests with the **curl** bar. The simulator brings two edge proxies: one that behaves like ingress-nginx, and a Gateway API implementation with the GatewayClass `webernetes`.
+When someone opens your website, the request first lands on an **Ingress controller**. That's a proxy in your cluster that looks at the hostname and path of every request and forwards it to the right app. You configure it with **Ingress** objects: "requests for `shop.example.com/api` go to the API, everything else goes to the storefront".
 
-## The starting point: an Ingress with annotations
+For years, the most popular Ingress controller has been ingress-nginx. In [November 2025](https://kubernetes.io/blog/2025/11/11/ingress-nginx-retirement/) the Kubernetes networking group (SIG Network) announced its retirement. Maintenance ended in March 2026, and since then there have been no new releases, no bug fixes and no security patches.
 
-This is what a lot of real Ingresses look like. The API expects requests at `/users`, not `/api/users`, so a regex path and `rewrite-target` strip the prefix. The apps are plain Pods to keep the manifests short.
+The tricky part: nothing broke. Existing installations simply keep running. In many clusters, the component that receives every single request from the internet is now unmaintained, and nobody noticed.
+
+So what are the options? The Ingress *API* itself stays, only this controller is gone. You could switch to a different Ingress controller, but ingress-nginx is configured with lots of special `nginx.ingress.kubernetes.io/*` annotations, and other controllers don't understand them. On top of that, the Ingress API won't get any new features. If you have to rewrite your routing configuration anyway, it makes sense to rewrite it for its successor right away: [Gateway API](https://gateway-api.sigs.k8s.io/).
+
+## What we'll do
+
+We migrate a small shop. It consists of two apps behind one hostname, `shop.example.com`: a storefront (the website) and an API under `/api`. We go through it in five steps:
+
+1. Look at the current setup with ingress-nginx, including a hidden behavior that's easy to overlook.
+2. Learn the three building blocks of Gateway API.
+3. Translate the setup and find the bug that a typical migration introduces.
+4. Try a canary release, something that is much easier with Gateway API.
+5. Understand the most common error after a migration: a route that doesn't attach.
+
+At the end there's a plan for migrating a real cluster without downtime.
+
+As in the [probes post](/posts/readiness-vs-liveness-probes), every manifest runs on a simulated cluster in your browser. Click **▶ kubectl apply**, then send requests with the **curl** bar below the block. The buttons under the bar are ready-made requests, and you can also type your own. The simulator brings two proxies: one that behaves like ingress-nginx, and a Gateway API implementation called `webernetes`.
+
+## Step 1: The starting point, an Ingress with annotations
+
+This is what many real Ingress configurations look like. One detail matters: the API expects its requests at `/users`, not at `/api/users`. The `/api` prefix only exists so the proxy knows where to send the request, so it has to be removed before the request reaches the API. With ingress-nginx you do that with two annotations: `use-regex` allows a regular expression as the path, and `rewrite-target: /$2` replaces the path with the part after `/api/`.
+
+The apps are plain Pods with a Service each, to keep the manifests short. Apply the block and click all three requests.
 
 ```k8s-live
 # curl shop.example.com/
@@ -98,29 +120,35 @@ spec:
                   number: 80
 ```
 
-All three requests work, and the third one is worth a second look: `/API/users` with capital letters also reaches the API. ingress-nginx renders one nginx `server` block per host, and as soon as *one* Ingress for a host uses regex or `rewrite-target`, every path of that host becomes a case-insensitive regex. Even the `storefront` Ingress, which has no annotations at all. Behavior like this is exactly what silently goes missing in a migration.
+All three requests work. The third one deserves a second look: `/API/users` in capital letters also reaches the API. Why?
 
-## Same app, three objects
+ingress-nginx generates one nginx configuration block per hostname. As soon as *one* Ingress for that hostname uses a regex or `rewrite-target`, nginx treats *every* path of that hostname as a regex that ignores upper and lower case. That even applies to the `storefront` Ingress, which has no annotations at all.
 
-Gateway API splits up what the Ingress did alone, along the lines of who owns what in a real organization:
+Nobody wrote this behavior down on purpose, but your users might rely on it. Exactly this kind of behavior gets lost silently in a migration.
 
-* **GatewayClass** is the implementation, installed by the cluster operator. Envoy Gateway, Cilium, Istio, kgateway and others each bring their own. Here it's `webernetes`.
-* **Gateway** is the entry point: which ports, protocols and hostnames are accepted. Usually owned by the platform team.
-* **HTTPRoute** is the routing for one app, owned by the app team. It attaches itself to a Gateway via `parentRefs`.
+## Step 2: The three building blocks of Gateway API
 
-Path rewrites, header matches and traffic splitting are no longer annotations with string values but typed fields in the spec. That means they get validated, and they mean the same thing for every implementation.
+An Ingress does everything in one object. Gateway API splits the same job into three objects. The split follows who is responsible for what in a typical company:
 
-You don't have to write the first draft by hand. [ingress2gateway](https://github.com/kubernetes-sigs/ingress2gateway), which reached 1.0 in March 2026, reads your Ingresses straight from the cluster:
+* **GatewayClass** names the implementation, meaning the software that actually forwards the requests. The cluster operator installs it. Examples are Envoy Gateway, Cilium, Istio and kgateway. In our simulator it's called `webernetes`.
+* **Gateway** is the entry point: which ports, protocols and hostnames are accepted. It's usually managed by the platform team.
+* **HTTPRoute** contains the routing rules for one app and is managed by the team that owns the app. With `parentRefs` it says which Gateway it belongs to.
+
+Another important difference: path rewrites, header matches and traffic splits are no longer annotations with free-form text. They are real fields in the spec. Kubernetes can therefore check them when you apply them, and they mean the same thing in every implementation.
+
+You don't have to write the first draft by hand. The tool [ingress2gateway](https://github.com/kubernetes-sigs/ingress2gateway), which reached version 1.0 in March 2026, reads your Ingresses directly from the cluster and translates them:
 
 ```sh
 ingress2gateway print --providers=ingress-nginx -A
 ```
 
-It translates the common annotations and warns about everything it can't. Take those warnings seriously, because one of them concerns our shop: `rewrite-target` with capture groups like `$2` is not translated.
+It translates the common annotations and warns about everything it can't translate. Take those warnings seriously, because one of them affects our shop: `rewrite-target` with capture groups like `$2` is not translated.
 
-## Spot the bug
+## Step 3: Translate the shop and find the bug
 
-Here's the shop on Gateway API, translated the way a migration with a skipped warning ends up. Apply it and try the three requests again.
+Here is the shop on Gateway API, the way it looks when someone skipped that warning. Instead of two Ingresses there is now one Gateway and one HTTPRoute. The route has two rules: paths starting with `/api` go to the API, everything else goes to the storefront.
+
+Apply the block and send the three requests again.
 
 ```k8s-live
 # curl shop.example.com/
@@ -203,7 +231,9 @@ spec:
           port: 80
 ```
 
-`/api/users` now ends in a `404`, and the error message tells you why: the API receives `/api/users` because nothing strips the prefix anymore. Add a `URLRewrite` filter to the first rule, next to `backendRefs`, and apply again:
+`/api/users` now ends in a `404`. The error message tells you why: the API receives `/api/users`, because nothing removes the `/api` prefix anymore.
+
+To fix it, add a `URLRewrite` filter to the first rule, directly above `backendRefs` and at the same indentation, then apply again:
 
 ```yaml
       filters:
@@ -214,13 +244,17 @@ spec:
               replacePrefixMatch: /
 ```
 
-`ReplacePrefixMatch` replaces exactly the part matched by `PathPrefix`. No regex and no capture groups, and you can read what happens. `URLRewrite` has "Extended" support in the spec, so check that your implementation supports it. The big ones do.
+`ReplacePrefixMatch` replaces exactly the part of the path that the `PathPrefix` rule matched, here `/api`, with `/`. No regular expression, no capture groups, and anyone reading it understands what happens. In the Gateway API spec, `URLRewrite` has "Extended" support, which means not every implementation has to offer it. So check that yours does. The big ones do.
 
-And `/API/users`? It lands on the storefront, because Gateway API paths are case-sensitive. That's what the spec intends, and in most cases it's what you want. But if a client somewhere out there calls your API in capital letters, you'll only find out after the switch. So: check your access logs for such paths *before* migrating.
+And `/API/users`? It now lands on the storefront, because paths in Gateway API are case-sensitive. That's intended by the spec, and most of the time it's what you want. But if some client out there calls your API in capital letters, you'd only find out after the switch. So search your access logs for such paths *before* you migrate.
 
-## Canary releases without a second Ingress
+## Step 4: Canary releases without a second Ingress
 
-With ingress-nginx, a canary needs a second Ingress with the same host and path plus the annotations `canary: "true"` and `canary-weight`. With Gateway API it's just weights on the `backendRefs` of a single route. The route below sends 10% of the traffic to v2, and testers who send the header `x-canary: always` always get v2. Click the first curl preset a few times.
+With a **canary release** you send only a small part of the traffic to a new version first. If it works, you increase the share step by step. If not, only a few users are affected.
+
+With ingress-nginx you need a second Ingress with the same host and path plus the annotations `canary: "true"` and `canary-weight`. With Gateway API, you simply set weights on the `backendRefs` of one route. The route below sends 90% of the requests to version 1 and 10% to version 2. In addition, testers who send the header `x-canary: always` always get version 2.
+
+Apply the block and click the first request a few times. Most answers come from v1, now and then one from v2. The second request always lands on v2.
 
 ```k8s-live
 # curl shop.example.com/
@@ -310,11 +344,13 @@ spec:
           weight: 10
 ```
 
-Change the weights to `50` and `50`, apply, and the split changes immediately. A rollout is now a series of small, reviewable diffs to one object, which fits GitOps nicely.
+Change the weights to `50` and `50` and apply again: the split changes immediately. A rollout becomes a series of small changes to a single object, each easy to review. That fits well with GitOps, where every change goes through a pull request.
 
-## When the route just won't attach
+## Step 5: When the route just won't attach
 
-The most common question after a migration: "I applied the HTTPRoute, why does everything return 404?" Usually the route didn't attach to the Gateway, and Kubernetes doesn't complain about it in `kubectl apply`. Here the platform team has restricted the Gateway to `*.example.com`. Apply and look at the route's status line.
+The most common question after a migration: "I applied the HTTPRoute, so why does everything return 404?" Usually the route didn't attach to the Gateway, and `kubectl apply` doesn't warn you about it. The YAML is valid, so it gets accepted. Whether the Gateway actually uses the route only shows up later, in the route's status.
+
+In this example the platform team has restricted the Gateway to hostnames matching `*.example.com`. The route, however, wants to serve `example.com`. Apply the block, look at the route's status line below the block and try both requests.
 
 ```k8s-live
 # curl example.com/
@@ -368,19 +404,25 @@ spec:
           port: 80
 ```
 
-`Accepted False (NoMatchingListenerHostname)`: the wildcard `*.example.com` covers `www.example.com`, but not the apex domain `example.com` itself. Add a second listener with `hostname: example.com`, or change the route to `www.example.com`. On a real cluster, `kubectl describe httproute` shows the same conditions under `status.parents`. Make checking them part of every migration. The terminal (`~`) knows `kubectl get gateways` and `kubectl get httproutes -n <namespace>` too.
+The status shows `Accepted False (NoMatchingListenerHostname)`. The wildcard `*.example.com` covers `www.example.com`, but not the bare domain `example.com` itself. There are two ways to fix it: add a second listener with `hostname: example.com` to the Gateway, or change the route to `www.example.com`.
 
-## A migration plan that doesn't need a maintenance window
+On a real cluster, `kubectl describe httproute <name>` shows the same information under `status.parents`. Make checking it a fixed part of every migration. In the simulator's terminal (`~`), `kubectl get gateways` and `kubectl get httproutes -n live-4` work too.
 
-1. **Take inventory.** `kubectl get ingress -A -o yaml | grep -o 'nginx.ingress.kubernetes.io/[a-z-]*' | sort | uniq -c` shows which annotations you really use. `configuration-snippet` and `server-snippet` have no equivalent and need the most attention. They let anyone who can create an Ingress inject raw nginx config, which has led to several CVEs over the years. [IngressNightmare](https://kubernetes.io/blog/2025/03/24/ingress-nginx-cve-2025-1974/) in 2025 also smuggled config in through annotations. You won't miss them.
-2. **Translate.** `ingress2gateway print` for the first draft, then work through every warning by hand, especially regex paths and rewrites.
-3. **Run both side by side.** The Gateway gets its own IP address, and Services and Pods stay unchanged. Test with `curl --resolve shop.example.com:443:<gateway-ip> https://shop.example.com/...` before DNS points there.
-4. **Switch over gradually.** Lower the DNS TTL, switch, watch the error rate. Leave ingress-nginx running for a while so you can switch back.
-5. **Clean up.** Only then delete the Ingresses and the controller.
+## A migration plan without a maintenance window
 
-## Rules of thumb
+This is how you can move a real cluster step by step, without downtime:
 
-* **Unmaintained ≠ broken.** ingress-nginx keeps running, and that's exactly why it gets forgotten. Put the migration on your roadmap before the next CVE does it for you.
-* **Annotations are behavior.** Every annotation is a feature that needs a replacement or a conscious decision. Look for the implicit ones too, like case-insensitive regex paths.
-* **Check `status`, not just `kubectl apply`.** An HTTPRoute that wasn't accepted is valid YAML that does nothing.
-* **Use the role split.** Gateways for the platform team, HTTPRoutes for the app teams, and nobody needs access to the controller's ConfigMap anymore.
+1. **Take inventory.** Find out which annotations you actually use:
+   `kubectl get ingress -A -o yaml | grep -o 'nginx.ingress.kubernetes.io/[a-z-]*' | sort | uniq -c`
+   Pay the most attention to `configuration-snippet` and `server-snippet`. They have no equivalent in Gateway API. They also let anyone who can create an Ingress inject raw nginx configuration, which has led to several security vulnerabilities over the years. [IngressNightmare](https://kubernetes.io/blog/2025/03/24/ingress-nginx-cve-2025-1974/) in 2025 also smuggled configuration in through annotations. You won't miss them.
+2. **Translate.** Create a first draft with `ingress2gateway print`, then work through every warning by hand, especially regex paths and rewrites.
+3. **Run both side by side.** The Gateway gets its own IP address, while your Services and Pods stay exactly as they are. Test the new path before you change DNS, for example with `curl --resolve shop.example.com:443:<gateway-ip> https://shop.example.com/...`. That sends the request to the Gateway even though DNS still points to the old controller.
+4. **Switch over gradually.** Lower the DNS TTL (how long clients cache the address) first, then switch DNS to the Gateway and watch the error rate. Keep ingress-nginx running for a while so you can switch back if needed.
+5. **Clean up.** Only then delete the Ingresses and ingress-nginx itself.
+
+## Summary
+
+* **Unmaintained isn't the same as broken.** ingress-nginx keeps running, and that's exactly why it gets forgotten. Put the migration on your roadmap before the next security vulnerability forces you to.
+* **Annotations are behavior.** Every annotation is a feature that needs a replacement or a conscious decision to drop it. Look for hidden behavior too, like regex paths that ignore upper and lower case.
+* **Check the `status`, not just `kubectl apply`.** An HTTPRoute that wasn't accepted is valid YAML that does nothing.
+* **Use the split of responsibilities.** The platform team manages Gateways, app teams manage their HTTPRoutes, and nobody needs access to the controller's configuration anymore.

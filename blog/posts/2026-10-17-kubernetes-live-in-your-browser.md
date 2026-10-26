@@ -1,10 +1,27 @@
 # Kubernetes, live in your browser
 
-Reading about Kubernetes is fine. Poking at it is better. The manifests in this post are **live**: hit **▶ kubectl apply** and they run on a simulated cluster right here in your browser tab, powered by [webernetes](https://github.com/ngrok/webernetes). Every block is editable, so change things and apply again. Each one runs in its own namespace, shown in its header.
+Try Kubernetes yourself without installing anything: start an app, make it reachable, watch Kubernetes repair it and learn to read two common errors. Everything runs in this browser tab.
 
-## A pod and a service
+## How the live examples work
 
-The smallest useful thing: one nginx pod and a `NodePort` service in front of it. Apply it, wait for `Running`, then hit the **curl** button.
+Reading about Kubernetes only gets you so far. You understand it much faster when you can try things and see what happens. That's why the code blocks in this post are **live**. They run on a small Kubernetes cluster that is simulated right here in your browser with [webernetes](https://github.com/ngrok/webernetes). Nothing is sent to a server, and you can't break anything.
+
+Every live block works the same way:
+
+1. Click **▶ kubectl apply**. This sends the manifest (the YAML file that describes what you want) to the simulated cluster, just like `kubectl apply -f` would on a real one.
+2. Below the block you see what Kubernetes created and what state it is in.
+3. The text in the block is editable. Change something, click **▶ kubectl apply** again and see what changes. **↺ reset** deletes everything the block created, so you can start from scratch.
+
+Each block runs in its own namespace (a separate area of the cluster), which is shown in the block's header, for example `namespace: live-1`. You'll need that name when you use the terminal: press `~` on your keyboard to open a terminal that understands the most important `kubectl` commands.
+
+## Step 1: Start an app and make it reachable
+
+We start with the smallest setup that's actually useful: a web server that you can send a request to. For that we need two objects:
+
+* A **Pod** runs one or more containers. Here it's a single container with the web server nginx.
+* A **Service** gives the pod a stable address. Pods come and go, and their IP addresses change. The Service stays the same and forwards requests to every pod with the label `app: web`. The type `NodePort` makes it reachable from outside the cluster.
+
+Click **▶ kubectl apply** and wait until the pod shows `Running`. Then click the **curl web** button. It sends an HTTP request to the Service, and nginx answers.
 
 ```k8s-live
 apiVersion: v1
@@ -33,9 +50,19 @@ spec:
       targetPort: 80
 ```
 
-## Deployments heal themselves
+The label is what connects the two: the Service's `selector` searches for `app: web`, and the pod carries exactly that label. Try it: change the pod's label to `app: other` and apply again. The Service no longer finds a pod, and curl reports `no ready endpoints`.
 
-A bare pod that dies stays dead. A `Deployment` keeps the number of replicas you asked for. Apply this, then press `~` and delete one of its pods with `kubectl delete pod -n <namespace> <name>`. Or change `replicas` to `5` and apply again.
+## Step 2: Let Kubernetes repair the app
+
+A single pod has a problem: if it crashes or gets deleted, it's gone. Nobody starts it again. In practice you therefore almost never create pods directly but use a **Deployment**. You tell it how many copies (replicas) you want, and Kubernetes makes sure that exactly this number is running at all times.
+
+Apply the block below. Three pods appear. Now try it out:
+
+1. Press `~` to open the terminal.
+2. Delete one of the pods: `kubectl delete pod -n live-2 <name>`. You'll find the pod name in the list below the block.
+3. Watch the list: Kubernetes notices that only two pods are left and immediately starts a new one.
+
+You can also change `replicas: 3` to `5` and apply again. Kubernetes then starts two more pods.
 
 ```k8s-live
 apiVersion: apps/v1
@@ -59,9 +86,15 @@ spec:
             - containerPort: 80
 ```
 
-## CrashLoopBackOff, up close
+This is the basic idea behind Kubernetes: you describe the state you want, and Kubernetes continuously works to get there.
 
-This container starts, panics and exits with code 1. Watch the kubelet restart it, then back off for longer and longer between attempts. `kubectl logs -n <namespace> crashy` in the terminal tells you why.
+## Step 3: Understand CrashLoopBackOff
+
+`CrashLoopBackOff` is one of the error states you see most often. It means: the container keeps crashing, and Kubernetes waits a little longer before each new attempt.
+
+The container below was built to show exactly that. It starts, runs into an error and stops right away. Apply it and watch the `RESTARTS` column. The counter goes up, and the pauses between attempts get longer and longer. Kubernetes does that on purpose, so that a broken app doesn't burn resources in an endless loop.
+
+To find out *why* the container crashes, look at its output: press `~` and run `kubectl logs -n live-3 crashy`. That's also the first step on a real cluster.
 
 ```k8s-live
 apiVersion: v1
@@ -74,9 +107,9 @@ spec:
       image: patricklaabs/crashloop:1.0
 ```
 
-## Spot the typo
+## Step 4: Find the error yourself
 
-Classic Friday afternoon deploy. Apply it, read the status, fix the image name and apply again.
+Now it's your turn. Someone deployed this pod late on a Friday afternoon, and it doesn't start. Apply it, read the status below the block, and fix the error directly in the block. Then click **▶ kubectl apply** again.
 
 ```k8s-live
 apiVersion: v1
@@ -89,4 +122,13 @@ spec:
       image: ngnix:1.27
 ```
 
-The simulator knows the images `nginx`, `busybox`, `patricklaabs/blog` and `patricklaabs/crashloop`. Anything else ends in `ErrImagePull`, just like a typo would on a real cluster.
+Solution: the image is called `nginx`, not `ngnix`. Kubernetes can't download an image that doesn't exist, so the pod ends up in `ErrImagePull`. A small typo, and on a real cluster you'd see exactly the same error.
+
+The simulator only knows a handful of images, such as `nginx`, `busybox` and the example apps used in these posts. Any other image name ends in `ErrImagePull`.
+
+## Summary
+
+* A **Pod** runs your container. A **Service** makes it reachable at a fixed address and finds its pods by their labels.
+* A **Deployment** keeps the number of pods you asked for running and replaces pods that disappear.
+* **CrashLoopBackOff** means your container keeps crashing. `kubectl logs` shows you why.
+* **ErrImagePull** usually means that the image name or tag is wrong.

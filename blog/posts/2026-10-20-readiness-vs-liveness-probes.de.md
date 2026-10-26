@@ -1,15 +1,27 @@
 # Readiness- vs. Liveness-Probes, live
 
-Kubernetes weiß, ob dein Container *läuft*. Ob deine App tatsächlich *funktioniert*, weiß es nicht. Probes schließen diese Lücke, und die zwei gängigsten beantworten zwei sehr unterschiedliche Fragen:
+Kubernetes erkennt, ob dein Container läuft, aber nicht, ob deine App wirklich funktioniert. Probes schließen diese Lücke. In diesem Post siehst du Schritt für Schritt und live im Browser, welche Probe du wann brauchst und was ohne sie schiefgeht.
 
-* **Readiness:** „Soll dieser Pod gerade Traffic bekommen?“ Wenn nicht, wird er aus dem Service genommen, aber nichts wird neu gestartet.
-* **Liveness:** „Ist dieser Container hoffnungslos kaputt?“ Wenn ja, beendet das kubelet ihn und startet einen frischen.
+## Das Problem: Laufen ist nicht dasselbe wie Funktionieren
 
-Sie zu verwechseln ist einer der Klassiker, um eine völlig gesunde App lahmzulegen. Wie im [letzten Post](/de/posts/kubernetes-live-in-your-browser) läuft jedes Manifest unten auf einem simulierten Cluster in deinem Browser: Klick auf **▶ kubectl apply**, ändere etwas, wende es erneut an.
+Kubernetes startet deinen Container und sieht, dass der Prozess läuft. Ob deine App darin auch wirklich Anfragen beantworten kann, weiß Kubernetes nicht. Vielleicht lädt sie noch Daten, vielleicht hängt sie fest. Von außen sieht das alles gleich aus: Der Prozess ist da.
 
-## Ohne Readiness-Probe: Traffic zu früh
+**Probes** schließen diese Lücke. Eine Probe ist eine kleine Prüfung, meistens eine HTTP-Anfrage an eine Adresse in deiner App wie `/healthz`, die das **Kubelet** (der Kubernetes-Agent auf jedem Node, der Container startet und überwacht) in regelmäßigen Abständen ausführt. Je nach Antwort reagiert Kubernetes. Die beiden häufigsten Probes stellen zwei sehr unterschiedliche Fragen:
 
-`patricklaabs/slowstart` braucht etwa acht Sekunden, um seinen Cache aufzuwärmen, bevor es echte Requests bedienen kann. Bis dahin antwortet es mit `503`. Unten gibt es keine Readiness-Probe, also markiert Kubernetes den Pod als `Ready`, sobald der Prozess startet, und der Service schickt ihm fröhlich Traffic. Wende es an und hämmer auf den **curl**-Button.
+* **Readiness-Probe:** „Kann dieser Pod gerade Anfragen bearbeiten?“ Wenn nicht, schickt Kubernetes ihm keinen Traffic mehr. Neu gestartet wird nichts. Sobald die Probe wieder erfolgreich ist, bekommt der Pod wieder Traffic.
+* **Liveness-Probe:** „Ist dieser Container nicht mehr zu retten?“ Wenn ja, beendet das Kubelet den Container und startet einen neuen.
+
+Die beiden zu verwechseln ist einer der Klassiker, um eine eigentlich gesunde App lahmzulegen. Deshalb schauen wir uns unten jeden Fall einzeln an.
+
+Wie im [letzten Post](/de/posts/kubernetes-live-in-your-browser) läuft jedes Manifest auf einem simulierten Cluster in deinem Browser. Klick auf **▶ kubectl apply**, um es zu starten, ändere den Text und wende ihn erneut an, um Varianten auszuprobieren. Mit `~` öffnest du ein Terminal für `kubectl`-Befehle. Jeder Block läuft in einem eigenen Namespace, der in seinem Kopf steht.
+
+## Schritt 1: Ohne Readiness-Probe bekommen Nutzer Fehler
+
+Unsere Beispiel-App `patricklaabs/slowstart` ist ein kleiner Shop. Nach dem Start braucht sie etwa acht Sekunden, um ihre Daten zu laden (ihren Cache aufzuwärmen). Bis dahin beantwortet sie jede Anfrage mit dem Fehler `503 Service Unavailable`.
+
+Das Manifest unten startet zwei Kopien des Shops (ein **Deployment** mit zwei Replicas) und einen **Service**, der Anfragen auf sie verteilt. Eine Readiness-Probe gibt es nicht. Kubernetes hält einen Pod deshalb für bereit, sobald sein Prozess startet, und der Service schickt ihm sofort Anfragen.
+
+Wende den Block an und klick direkt nach dem Start der Pods ein paarmal auf den Button **curl shop**.
 
 ```k8s-live
 apiVersion: apps/v1
@@ -45,11 +57,13 @@ spec:
       targetPort: 8080
 ```
 
-Jeder Nutzer, der während des Aufwärmens auf einem Pod landet, bekommt einen Fehler. Auf einem echten Cluster passiert das bei jedem Rollout, jedem Hochskalieren und jedem Node-Drain.
+In den ersten Sekunden bekommst du `503`. Genau das würden auch deine Nutzer sehen. Auf einem echten Cluster passiert das nicht nur einmal: Es passiert bei jedem Rollout, bei jedem Hochskalieren und jedes Mal, wenn ein Node für Wartungsarbeiten geleert wird, denn irgendwo starten immer neue Pods.
 
-## Mit Readiness-Probe: warten, bis er warm ist
+## Schritt 2: Mit Readiness-Probe warten Pods, bis sie bereit sind
 
-Dieselbe App, ein Block mehr. Das kubelet fragt jetzt jede Sekunde `/readyz`, und der Pod kommt erst in den Service, wenn er `ok` sagt. Sieh zu, wie die Spalte `READY` ein paar Sekunden auf `0/1` bleibt, während curl überhaupt keine Endpoints findet, und danach klappt jeder Request.
+Jetzt sagen wir Kubernetes, wie es prüfen kann, ob der Shop bereit ist. Die App bietet dafür die Adresse `/readyz` an. Sie antwortet mit `ok`, sobald der Cache warm ist. Mit dem neuen Block `readinessProbe` fragt das Kubelet diese Adresse jede Sekunde ab (`periodSeconds: 1`). Ein Pod bekommt erst dann Anfragen vom Service, wenn die Prüfung erfolgreich ist.
+
+Wende den Block an und beobachte die Spalte `READY`. Sie zeigt ein paar Sekunden lang `0/1` und springt erst dann auf `1/1`.
 
 ```k8s-live
 apiVersion: apps/v1
@@ -90,11 +104,17 @@ spec:
       targetPort: 8080
 ```
 
-„Keine Endpoints“ klingt schlimmer als ein `503`, aber mit mehr als einer Replica heißt das: Der Traffic geht an die Pods, die bereit *sind*. Genau das verhindert, dass der [Chaos Monkey](/de/#chaos) auf der Startseite Fehler verursacht: Dieser Blog schaltet seine eigene Readiness auf `503`, sobald er `SIGTERM` bekommt, damit der Service ihm keine Requests mehr schickt, bevor er herunterfährt.
+Klickst du in den ersten Sekunden auf curl, bekommst du jetzt `no ready endpoints` statt einer `503`. Das heißt, der Service kennt keinen einzigen Pod, an den er Anfragen schicken darf. Das sieht auf den ersten Blick schlimmer aus, ist aber das richtige Verhalten: In dieser Demo starten alle Pods gleichzeitig. Auf einem echten Cluster starten neue Pods, während die alten noch laufen. Weil die neuen erst Traffic bekommen, wenn sie bereit sind, gehen die Anfragen in der Zwischenzeit weiter an die alten, funktionierenden Pods. Deine Nutzer merken davon nichts.
 
-## Liveness: wenn der Prozess lebt, aber die App tot ist
+Genau diesen Trick nutzt übrigens auch dieser Blog. Wenn Kubernetes einen Pod beenden will, schickt es ihm zuerst das Signal `SIGTERM`. Der Blog meldet sich daraufhin als nicht bereit (`503` auf seiner Readiness-Adresse), sodass der Service ihm keine Anfragen mehr schickt, bevor er herunterfährt. Deshalb kann der [Chaos Monkey](/de/#chaos) auf der Startseite Pods beenden, ohne dass Besucher Fehler sehen.
 
-`patricklaabs/deadlock` läuft etwa fünfzehn Sekunden lang einwandfrei und hängt dann fest, weil es auf einen Lock wartet, der nie freigegeben wird. Der Prozess stürzt nicht ab, also würde Kubernetes ihn ohne Probe ewig behalten, und er würde allen mit `500` antworten. Die Liveness-Probe unten bemerkt das nach drei fehlgeschlagenen Checks und lässt das kubelet den Container neu starten. Behalte die Spalte `RESTARTS` im Auge: Jeder Neustart bringt wieder fünfzehn gute Sekunden, bis zum nächsten Deadlock.
+## Schritt 3: Eine Liveness-Probe startet eine hängende App neu
+
+Jetzt zur anderen Probe. Unsere zweite Beispiel-App, `patricklaabs/deadlock`, funktioniert etwa fünfzehn Sekunden lang einwandfrei. Dann hängt sie fest: Sie wartet auf eine Sperre, die nie freigegeben wird (ein sogenannter Deadlock). Der Prozess stürzt nicht ab, er arbeitet einfach nicht mehr und beantwortet jede Anfrage mit `500`.
+
+Ohne Liveness-Probe würde Kubernetes das nicht bemerken. Der Pod würde für immer `Running` anzeigen und dabei nur Fehler ausliefern. Die `livenessProbe` unten fragt alle zwei Sekunden die Adresse `/healthz` ab. Nach drei fehlgeschlagenen Prüfungen in Folge (`failureThreshold: 3`) startet das Kubelet den Container neu.
+
+Wende den Block an, klick ab und zu auf **curl stuck** und behalte die Spalte `RESTARTS` im Auge. Nach jedem Neustart funktioniert die App wieder fünfzehn Sekunden lang, bis zum nächsten Deadlock.
 
 ```k8s-live
 apiVersion: v1
@@ -129,11 +149,13 @@ spec:
       targetPort: 8080
 ```
 
-Lösch den Block `livenessProbe` und wende es erneut an, um die Alternative zu sehen: ein Pod, der `Running` und `1/1` meldet, während er nur Fehler ausliefert.
+Zum Vergleich: Lösch den Block `livenessProbe` und wende das Manifest erneut an. Der Pod bleibt bei `Running` und `1/1`, sieht völlig gesund aus und antwortet trotzdem nur mit Fehlern.
 
-## Finde den Fehler
+Ein Neustart ist natürlich keine echte Lösung. Der Fehler in der App muss trotzdem behoben werden. Bis dahin sorgt die Liveness-Probe aber dafür, dass die App die meiste Zeit benutzbar bleibt.
 
-Jemand hat der langsam startenden App „zur Sicherheit“ eine Liveness-Probe verpasst. Wende es an und beobachte den Restart-Zähler. Drück dann `~` und führ `kubectl describe pod -n <namespace>` aus, um zu sehen, warum.
+## Schritt 4: Den Fehler selbst finden
+
+Jemand hat dem langsam startenden Shop aus Schritt 1 „sicherheitshalber“ eine Liveness-Probe verpasst. Wende den Block an und beobachte den Restart-Zähler. Drück dann `~` und führ `kubectl logs -n live-4 too-eager` aus, um zu sehen, was die App gerade gemacht hat, als sie beendet wurde.
 
 ```k8s-live
 apiVersion: v1
@@ -154,9 +176,9 @@ spec:
         failureThreshold: 3
 ```
 
-Die App braucht acht Sekunden zum Aufwärmen, aber die Probe gibt nach drei Fehlschlägen im Abstand von zwei Sekunden auf. Das kubelet beendet den Container kurz bevor er bereit gewesen wäre, er wärmt sich wieder auf, wird wieder beendet und landet in `CrashLoopBackOff`. Eine gesunde App, zu Tode neu gestartet.
+Die Logs zeigen, wie die App ihren Cache aufwärmt und die Probe mit `503` beantwortet, aber nie die Zeile `Cache warm, ready to serve traffic`. Das passiert hier: Die App braucht acht Sekunden zum Starten. Die Probe prüft alle zwei Sekunden und gibt nach drei Fehlschlägen auf, also nach etwa sechs Sekunden. Das Kubelet beendet den Container kurz bevor er bereit gewesen wäre. Der neue Container fängt wieder von vorne an zu laden, wird wieder beendet, und so weiter. Am Ende landet der Pod in `CrashLoopBackOff`. Eine gesunde App, zu Tode neu gestartet.
 
-Die Lösung ist eine **Startup-Probe**. Solange sie läuft, pausieren Liveness- und Readiness-Checks, und ein langsamer Start bekommt sein eigenes, großzügigeres Budget. Füg das neben der Liveness-Probe ein und wende es erneut an:
+Die Lösung ist eine dritte Probe, die **Startup-Probe**. Solange sie noch nicht erfolgreich war, pausiert Kubernetes die Liveness- und Readiness-Probes. Damit bekommt ein langsamer Start sein eigenes, großzügigeres Zeitbudget. Füg diesen Block unter der `livenessProbe` ein (mit derselben Einrückung) und wende erneut an:
 
 ```yaml
       startupProbe:
@@ -167,11 +189,11 @@ Die Lösung ist eine **Startup-Probe**. Solange sie läuft, pausieren Liveness- 
         failureThreshold: 30
 ```
 
-Damit hat der erste erfolgreiche Check bis zu 30 Sekunden Zeit, danach übernimmt die strenge Liveness-Probe.
+Damit hat die App bis zu 30 Sekunden (30 Versuche, einer pro Sekunde) Zeit für ihre erste erfolgreiche Prüfung. Danach übernimmt die strenge Liveness-Probe.
 
-## Faustregeln
+## Zusammenfassung
 
-* **Readiness** entscheidet über Traffic. Nutze sie für alles, was Requests bedient.
-* **Liveness** entscheidet über Neustarts. Nutze sie nur für Fehler, die ein Neustart wirklich behebt, etwa einen Deadlock. Lass sie nie eine Datenbank oder einen anderen Service prüfen: Fällt diese Abhängigkeit aus, starten alle Pods gleichzeitig neu, und aus einem Ausfall werden zwei.
-* **Startup** schützt langsame Starts. Greif zu ihr statt zu einem riesigen `initialDelaySeconds`.
-* Halte die Endpoints billig. Eine Probe läuft alle paar Sekunden auf jedem Pod, für immer.
+* **Readiness** entscheidet, ob ein Pod Traffic bekommt. Nutze sie für jeden Container, der Anfragen beantwortet.
+* **Liveness** entscheidet, ob ein Container neu gestartet wird. Nutze sie nur für Fehler, die ein Neustart wirklich behebt, wie einen Deadlock. Lass sie nie eine Datenbank oder einen anderen Service prüfen: Fällt diese Abhängigkeit aus, starten alle Pods gleichzeitig neu, und aus einem Ausfall werden zwei.
+* **Startup** schützt langsame Starts. Nutze sie statt eines sehr großen `initialDelaySeconds`.
+* Halte die Prüfadressen billig. Eine Probe läuft alle paar Sekunden auf jedem Pod, so lange der Pod existiert.

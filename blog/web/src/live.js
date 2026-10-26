@@ -16,7 +16,7 @@ const STATUS_STYLES = {
 	Succeeded: "text-slate-400",
 };
 const MAX_OUTPUT = 8;
-const GROUPS = { Ingress: "networking.k8s.io", GatewayClass: "gateway.networking.k8s.io", Gateway: "gateway.networking.k8s.io", HTTPRoute: "gateway.networking.k8s.io" };
+const GROUPS = { HorizontalPodAutoscaler: "autoscaling", PriorityClass: "scheduling.k8s.io", Ingress: "networking.k8s.io", GatewayClass: "gateway.networking.k8s.io", Gateway: "gateway.networking.k8s.io", HTTPRoute: "gateway.networking.k8s.io" };
 
 function el(tag, className = "", text = "") {
 	const node = document.createElement(tag);
@@ -65,15 +65,18 @@ function decorate(code, namespace) {
 		if (event.key === "Enter") send(curlInput.value);
 	});
 	const curlPresets = el("div", "flex w-full flex-wrap gap-2");
+	// kubectl commands to try go in the manifest as comments too:
+	// # kubectl patch pod shop --subresource resize -p '{...}'
+	const commandBar = el("div", "mt-3 hidden flex-wrap gap-2");
 	curlBar.append(el("span", "text-slate-500", "$ curl"), curlInput, curlSend, curlPresets);
 	const output = el("div", "hidden border-t border-cluster-700 px-4 py-3 font-mono text-xs leading-5");
 	const log = el("ol", "m-0 list-none space-y-0.5 p-0");
 	const resources = el("div", "mt-3 hidden overflow-x-auto");
 	const hint = el("p", "mb-0 mt-3 hidden text-slate-600", `Inspect it in the terminal: press ~ and run  kubectl get all -n ${namespace}`);
-	output.append(log, resources, curlBar, hint);
+	output.append(log, resources, curlBar, commandBar, hint);
 	wrapper.append(bar, pre, output);
 
-	const state = { cluster: null, m: null, pods: new Map(), services: new Map(), watching: false, applied: false, ticker: null, edge: null, requests: [] };
+	const state = { appliedResources: new Map(), commands: [], cluster: null, m: null, pods: new Map(), services: new Map(), watching: false, applied: false, ticker: null, edge: null, requests: [] };
 
 	function print(text, className = "text-slate-300") {
 		log.append(el("li", `whitespace-pre-wrap break-words pl-0 ${className}`, text));
@@ -81,14 +84,21 @@ function decorate(code, namespace) {
 		output.classList.remove("hidden");
 	}
 
+	function resourceCells(pod) {
+		const { allocated, desired, priority } = state.m.resizeInfo(pod);
+		const cpu = allocated === desired ? state.m.formatCPU(allocated) : `${state.m.formatCPU(allocated)} → ${state.m.formatCPU(desired)}`;
+		return [el("td", "border-0 p-0 pr-4", allocated || desired ? cpu : "-"), el("td", "border-0 p-0 pr-4", String(priority))];
+	}
+
 	function renderResources() {
 		const { m } = state;
 		resources.replaceChildren();
 		const pods = [...state.pods.values()].sort((a, b) => a.metadata.name.localeCompare(b.metadata.name));
+		const withResources = m.hasResources(pods);
 		if (pods.length) {
 			const table = el("table", "m-0 w-full whitespace-nowrap text-left text-xs");
 			const head = el("tr", "text-slate-500");
-			for (const h of ["NAME", "READY", "STATUS", "RESTARTS", "AGE", "NODE"]) head.append(el("th", "border-0 p-0 pb-1 pr-4 font-mono text-xs font-normal normal-case tracking-normal text-slate-500", h));
+			for (const h of ["NAME", "READY", "STATUS", "RESTARTS", ...(withResources ? ["CPU", "PRIORITY"] : []), "AGE", "NODE"]) head.append(el("th", "border-0 p-0 pb-1 pr-4 font-mono text-xs font-normal normal-case tracking-normal text-slate-500", h));
 			table.append(head);
 			for (const pod of pods) {
 				const statuses = pod.status?.containerStatuses ?? [];
@@ -99,12 +109,54 @@ function decorate(code, namespace) {
 					el("td", "border-0 p-0 pr-4", `${statuses.filter((s) => s.ready).length}/${pod.spec?.containers?.length ?? 0}`),
 					el("td", `border-0 p-0 pr-4 ${STATUS_STYLES[status] ?? "text-slate-400"}`, status),
 					el("td", "border-0 p-0 pr-4", String(statuses.reduce((n, s) => n + (s.restartCount ?? 0), 0))),
+					...(withResources ? resourceCells(pod) : []),
 					el("td", "border-0 p-0 pr-4 text-slate-500", m.age(pod.metadata.creationTimestamp)),
 					el("td", "border-0 p-0 pr-4 text-slate-500", pod.spec?.nodeName ?? "<none>"),
 				);
 				table.append(row);
 			}
 			resources.append(table);
+		}
+		for (const pod of withResources ? pods : []) {
+			const { condition } = m.resizeInfo(pod);
+			const preempted = m.preemptedBy(pod);
+			if (!condition && !preempted.length) continue;
+			const line = el("div", "mt-2 flex flex-wrap items-center gap-2");
+			line.append(el("span", "text-slate-500", `pod/${pod.metadata.name}`));
+			if (condition?.type === "PodResizeInProgress") line.append(el("span", "text-sky-300", "PodResizeInProgress"));
+			if (condition?.type === "PodResizePending") line.append(el("span", "text-amber-300", `PodResizePending: ${condition.reason}`), el("span", "text-slate-500", condition.message));
+			if (preempted.length) line.append(el("span", "text-rose-300", `preempted: ${preempted.join(", ")}`));
+			resources.append(line);
+		}
+		for (const hpa of m.listHPAs(namespace)) {
+			const line = el("div", "mt-3 flex flex-wrap items-center gap-2");
+			const { status, spec } = hpa;
+			const metric = status.currentMetrics[0];
+			const target = metric ? (metric.target.averageValue ?? metric.target.value) : undefined;
+			line.append(el("span", "text-slate-500", `hpa/${hpa.metadata.name}`));
+			line.append(el("span", "text-slate-400", metric ? `${metric.name}: ${metric.value}/${target}` : "metrics: <unknown>"));
+			line.append(el("span", "text-slate-400", `replicas: ${status.currentReplicas ?? "-"} (min ${spec.minReplicas ?? 1}, max ${spec.maxReplicas})`));
+			const zero = m.conditionOf(hpa, "ScaledToZero");
+			if (zero) line.append(el("span", zero.status === "True" ? "text-sky-300" : "text-slate-400", `ScaledToZero: ${zero.status}`));
+			const active = m.conditionOf(hpa, "ScalingActive");
+			if (active?.status === "False") line.append(el("span", "text-rose-300", `ScalingActive: False (${active.message})`));
+			const able = m.conditionOf(hpa, "AbleToScale");
+			if (able?.status === "False") line.append(el("span", "text-rose-300", `AbleToScale: False (${able.message})`));
+			resources.append(line);
+		}
+		if (m.listHPAs(namespace).some((h) => (h.spec.metrics ?? []).some((x) => (x.external ?? x.object)?.metric?.name === m.QUEUE_METRIC))) {
+			const queue = m.queueOf(namespace);
+			const line = el("div", "mt-3 flex flex-wrap items-center gap-2");
+			line.append(el("span", "text-slate-500", "queue"), el("span", "text-slate-400", `${queue.pending} pending, ${queue.done} done`));
+			const add = el("button", "rounded border border-cluster-600 px-2 py-0.5 text-cyan-300 transition hover:border-k8s hover:text-white", "+10 jobs");
+			add.type = "button";
+			add.addEventListener("click", () => {
+				m.addJobs(namespace, 10);
+				print("10 jobs added to the queue", "text-slate-500");
+				renderResources();
+			});
+			line.append(add);
+			resources.append(line);
 		}
 		for (const svc of state.services.values()) {
 			const port = svc.spec?.ports?.find((p) => p.nodePort);
@@ -214,6 +266,8 @@ function decorate(code, namespace) {
 		state.m = m;
 		state.yaml = yaml;
 		state.cluster = await m.bootCluster();
+		m.startAutoscaler(state.cluster);
+		m.startResizer(state.cluster);
 		log.lastChild?.remove();
 	}
 
@@ -235,9 +289,53 @@ function decorate(code, namespace) {
 		if (!docs.length) throw new Error("no objects passed to apply");
 		for (const doc of docs) {
 			if (!doc.kind || !doc.metadata?.name) throw new Error("every object needs a kind and metadata.name");
-			if (!["Namespace", "GatewayClass", "IngressClass"].includes(doc.kind)) doc.metadata.namespace = namespace;
+			if (!["Namespace", "GatewayClass", "IngressClass", "PriorityClass"].includes(doc.kind)) doc.metadata.namespace = namespace;
 		}
 		return [{ apiVersion: "v1", kind: "Namespace", metadata: { name: namespace } }, ...docs];
+	}
+
+	function resourcesOf(pod) {
+		return JSON.stringify((pod.spec?.containers ?? []).map((c) => [c.name, c.resources ?? {}]));
+	}
+
+	// checkResize fails like the API server when an apply changes a running
+	// pod's resources: those can only change through the resize subresource.
+	function checkResize(pod) {
+		const before = state.appliedResources.get(pod.metadata.name);
+		if (!state.pods.has(pod.metadata.name) || before === undefined || before === resourcesOf(pod)) return;
+		throw new Error(
+			`The Pod "${pod.metadata.name}" is invalid: spec: Forbidden: pod updates may not change fields other than spec.containers[*].image, spec.activeDeadlineSeconds, spec.tolerations (only additions to existing tolerations) or spec.terminationGracePeriodSeconds\n(container resources can only be changed through the resize subresource: kubectl patch pod ${pod.metadata.name} --subresource resize -p '...')`,
+		);
+	}
+
+	function renderCommands() {
+		commandBar.replaceChildren();
+		for (const command of state.commands) {
+			const preset = el("button", "rounded border border-cluster-700 px-2 py-0.5 text-left text-slate-400 transition hover:border-k8s hover:text-white", `$ ${command}`);
+			preset.type = "button";
+			preset.addEventListener("click", () => runCommand(command));
+			commandBar.append(preset);
+		}
+		commandBar.classList.toggle("hidden", !state.commands.length);
+		commandBar.classList.toggle("flex", state.commands.length > 0);
+	}
+
+	// runCommand runs the kubectl commands the posts offer as presets. Anything
+	// else belongs in the terminal.
+	async function runCommand(command) {
+		print(`$ ${command}`, "text-slate-500");
+		const tokens = command.match(/"[^"]*"|'[^']*'|\S+/g)?.map((t) => t.replace(/^(["'])(.*)\1$/, "$2")) ?? [];
+		const patch = tokens.indexOf("-p") >= 0 ? tokens[tokens.indexOf("-p") + 1] : undefined;
+		if (tokens[1] !== "patch" || !["pod", "pods", "po"].includes(tokens[2]) || !tokens.includes("resize") || !patch) {
+			print("Run this one in the terminal: press ~", "text-slate-500");
+			return;
+		}
+		try {
+			print(await state.m.patchResize(state.cluster, namespace, tokens[3], patch), "text-emerald-300");
+		} catch (err) {
+			print(err.message, "text-rose-300");
+		}
+		renderResources();
 	}
 
 	apply.addEventListener("click", async () => {
@@ -259,26 +357,52 @@ function decorate(code, namespace) {
 				print(`error: ${err.message}`, "text-rose-300");
 				return;
 			}
-			const core = objects.filter((obj) => !routing.includes(obj));
-			const verbs = new Map();
+			let extras;
 			try {
+				extras = objects.filter((obj) => state.m.isAutoscalingKind(obj) || state.m.isPriorityClass(obj));
+			} catch (err) {
+				print(`error: ${err.message}`, "text-rose-300");
+				return;
+			}
+			const core = objects.filter((obj) => !routing.includes(obj) && !extras.includes(obj));
+			const verbs = new Map();
+			const invalid = [];
+			try {
+				for (const obj of extras.filter((o) => o.kind === "PriorityClass")) verbs.set(obj, state.m.applyPriorityClass(obj));
+				for (const obj of core.filter((o) => o.kind === "Pod")) {
+					state.m.checkPodPriority(obj);
+					checkResize(obj);
+				}
 				await state.cluster.apply(core);
+				for (const obj of core.filter((o) => o.kind === "Pod")) state.appliedResources.set(obj.metadata.name, resourcesOf(obj));
 				for (const obj of routing) verbs.set(obj, state.m.applyRouting(obj));
+				for (const obj of extras.filter((o) => o.kind === "HorizontalPodAutoscaler")) {
+					try {
+						verbs.set(obj, state.m.applyHPA(obj));
+					} catch (err) {
+						verbs.set(obj, null);
+						invalid.push(`Error from server (Invalid): error when creating "STDIN": ${err.message}`);
+					}
+				}
 			} catch (err) {
 				print(`error: ${err?.message ?? err}`, "text-rose-300");
 				return;
 			}
 			const verb = state.applied ? "configured" : "created";
 			for (const obj of objects.slice(1)) {
+				if (verbs.get(obj) === null) continue;
 				const group = GROUPS[obj.kind] ? `.${GROUPS[obj.kind]}` : "";
 				print(`${obj.kind.toLowerCase()}${group}/${obj.metadata.name} ${verbs.get(obj) ?? verb}`, "text-emerald-300");
 			}
+			for (const message of invalid) print(message, "text-rose-300");
 			if (routing.length) {
 				state.edge = routing.some((obj) => obj.kind !== "Ingress" && obj.kind !== "IngressClass") ? "gateway" : "ingress";
 				state.requests = [...code.textContent.matchAll(/^\s*#\s*curl\s+(.+)$/gm)].map((match) => match[1].trim());
 				await state.m.ensureEdge(state.cluster, state.edge);
 				renderCurl();
 			}
+			state.commands = [...code.textContent.matchAll(/^\s*#\s*(kubectl\s+.+)$/gm)].map((match) => match[1].trim());
+			renderCommands();
 			state.applied = true;
 			reset.disabled = false;
 			hint.classList.remove("hidden");
@@ -296,6 +420,9 @@ function decorate(code, namespace) {
 		print(`$ kubectl delete namespace ${namespace}`, "text-slate-500");
 		try {
 			state.m.deleteRoutingNamespace(namespace);
+			state.m.deleteAutoscalingNamespace(namespace);
+			state.m.deleteResizeNamespace(namespace);
+			state.appliedResources.clear();
 			await state.cluster.api.corev1.deleteNamespace({ name: namespace });
 			// Wait for the namespace controller to clean up so a re-apply starts fresh.
 			for (let i = 0; i < 100; i++) {
