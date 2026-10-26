@@ -2,7 +2,10 @@
 // Everything here runs in the visitor's browser; nothing talks to a backend.
 import { BaseImage, Cluster } from "@ngrok/webernetes";
 import { EDGES, edgeImages, edgeManifests } from "./gateway.js";
+import { finishJob, returnJob, takeJob } from "./autoscaling.js";
 
+export { QUEUE_METRIC, addJobs, applyHPA, conditionOf, deleteAutoscalingNamespace, isAutoscalingKind, listHPAs, queueOf, startAutoscaler, subscribe as subscribeAutoscaling } from "./autoscaling.js";
+export { NODE_CPU, applyPriorityClass, checkPodPriority, deleteResizeNamespace, formatCPU, hasResources, isPriorityClass, listPriorityClasses, patchResize, preemptedBy, priorityOf, resizeInfo, startResizer, subscribe as subscribeResize } from "./resize.js";
 export { EDGES, SCOPE_HEADER, applyRouting, deleteRoutingNamespace, gatewayStatusOf, listRouting, routeStatus, routingKind, subscribe as subscribeRouting } from "./gateway.js";
 
 export const NAMESPACE = "blog";
@@ -231,6 +234,39 @@ class ShopAPIImage extends BaseImage {
 	}
 }
 
+// QueueWorkerImage takes jobs from the job queue of its namespace, one every
+// two seconds. The queue's length is the external metric an HPA scales on.
+class QueueWorkerImage extends BaseImage {
+	static imageName = "patricklaabs/queue-worker";
+	static imageVersion = "1.0";
+	defaultCommand = ["work"];
+
+	async exec(ctx, argv) {
+		if (argv[0] !== "work") {
+			return await super.exec(ctx, argv);
+		}
+		const namespace = ctx.pod.namespace;
+		log(ctx, "worker started, waiting for jobs");
+		for (;;) {
+			const job = takeJob(namespace);
+			if (job === undefined) {
+				await ctx.sleep(500);
+				continue;
+			}
+			try {
+				await ctx.sleep(2000);
+			} catch (exit) {
+				// Stopped mid-job: the job was never acknowledged, so it goes back.
+				returnJob(namespace);
+				log(ctx, `stopped, job #${job} goes back to the queue`);
+				throw exit;
+			}
+			finishJob(namespace);
+			log(ctx, `processed job #${job}`);
+		}
+	}
+}
+
 function manifests(replicas) {
 	return [
 		{ apiVersion: "v1", kind: "Namespace", metadata: { name: NAMESPACE } },
@@ -278,7 +314,7 @@ let booting;
 export function bootCluster({ replicas = 3 } = {}) {
 	booting ??= (async () => {
 		const cluster = new Cluster();
-		for (const image of [BlogImage, NginxImage, BusyboxImage, CrashLoopImage, SlowStartImage, DeadlockImage, storefrontImage(1), storefrontImage(2), ShopAPIImage, ...edgeImages(log)]) {
+		for (const image of [BlogImage, NginxImage, BusyboxImage, CrashLoopImage, SlowStartImage, DeadlockImage, storefrontImage(1), storefrontImage(2), ShopAPIImage, QueueWorkerImage, ...edgeImages(log)]) {
 			cluster.registerImage(image);
 		}
 		await cluster.init();

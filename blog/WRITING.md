@@ -30,3 +30,4 @@ Every post exists in English and German (`posts/<date>-<slug>.md` and `posts/<da
 * `k8s-live` blocks run on the simulator in `web/src/cluster.js`. Each block gets the namespace `live-N`, numbered by its position in the post. If you add or remove a block, update the namespaces mentioned in the text.
 * Check every instruction against the simulator: the terminal only knows a subset of `kubectl` (for example, no `describe`), and only the images defined in `cluster.js` exist.
 * Requests for the curl bar go into the manifest as comments: `# curl shop.example.com/api/users`.
+* `kubectl patch pod … --subresource resize` commands can go into the manifest as comments too (`# kubectl patch …`). They show up as buttons below the block. Other kubectl commands belong in the terminal (`~`).

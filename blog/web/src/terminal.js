@@ -2,8 +2,8 @@
 // The cluster itself is only loaded on the first kubectl command.
 
 const PROMPT = "patrick@cluster:~$ ";
-const KUBECTL_COMMANDS = ["get", "delete", "scale", "logs", "exec", "describe", "apply", "top", "version", "cluster-info"];
-const RESOURCES = ["pods", "nodes", "deployments", "replicasets", "services", "events", "namespaces", "ingresses", "ingressclasses", "gateways", "gatewayclasses", "httproutes", "all"];
+const KUBECTL_COMMANDS = ["get", "delete", "scale", "patch", "logs", "exec", "describe", "apply", "top", "version", "cluster-info"];
+const RESOURCES = ["pods", "nodes", "deployments", "replicasets", "services", "events", "namespaces", "ingresses", "ingressclasses", "gateways", "gatewayclasses", "httproutes", "horizontalpodautoscalers", "priorityclasses", "all"];
 const RESOURCE_ALIASES = {
 	po: "pods", pod: "pods", pods: "pods",
 	no: "nodes", node: "nodes", nodes: "nodes",
@@ -17,6 +17,8 @@ const RESOURCE_ALIASES = {
 	gtw: "gateways", gateway: "gateways", gateways: "gateways",
 	gc: "gatewayclasses", gatewayclass: "gatewayclasses", gatewayclasses: "gatewayclasses",
 	httproute: "httproutes", httproutes: "httproutes",
+	hpa: "horizontalpodautoscalers", horizontalpodautoscaler: "horizontalpodautoscalers", horizontalpodautoscalers: "horizontalpodautoscalers",
+	pc: "priorityclasses", priorityclass: "priorityclasses", priorityclasses: "priorityclasses",
 	all: "all",
 };
 const PROTECTED_NAMESPACES = ["blog", "kube-system", "default"];
@@ -62,6 +64,8 @@ function parseFlags(args) {
 		if (key === "-n" || key === "--namespace") flags.namespace = value();
 		else if (key === "-o" || key === "--output") flags.output = value();
 		else if (key === "--replicas") flags.replicas = value();
+		else if (key === "--subresource") flags.subresource = value();
+		else if (key === "-p" || key === "--patch") flags.patch = value();
 		else if (key === "-A" || key === "--all-namespaces") flags.allNamespaces = true;
 		else if (key === "--all") flags.all = true;
 		else if (key === "-w" || key === "--watch" || key === "-f" || key === "--follow") flags.watch = true;
@@ -143,6 +147,8 @@ function createTerminal() {
 				"  get pods|nodes|deploy|rs|svc|events|ns|all [-n ns] [-o wide]",
 				"  delete pod <name>... | delete pods --all",
 				"  scale deployment/blog --replicas=<n>",
+				"  get hpa|priorityclasses|ingresses|gateways|httproutes [-n ns]",
+				"  patch pod <name> -n <ns> --subresource resize -p '<json>'",
 				"  logs <pod>",
 				"  exec <pod> -- <cmd>        (try: printenv, cat /etc/hostname)",
 				"  version | cluster-info",
@@ -163,7 +169,7 @@ function createTerminal() {
 				print("kubectl controls the Kubernetes cluster manager.\n\nUsage: kubectl <command> [flags]. Type `help` for the commands this one knows.");
 				return;
 			case "version": {
-				print("Client Version: v1.36.0-browser\nServer Version: v1.36.0-webernetes\nKustomize Version: lol no");
+				print("Client Version: v1.37.0-browser\nServer Version: v1.37.0-webernetes\nKustomize Version: lol no");
 				return;
 			}
 			case "cluster-info": {
@@ -177,6 +183,8 @@ function createTerminal() {
 				return await del(positional, flags);
 			case "scale":
 				return await scale(positional, flags);
+			case "patch":
+				return await patch(positional, flags);
 			case "logs":
 				return await logs(positional, flags);
 			case "exec":
@@ -257,7 +265,7 @@ function createTerminal() {
 			const rows = [["NAME", "STATUS", "ROLES", "AGE", "VERSION"]];
 			for (const node of nodes) {
 				const ready = node.status?.conditions?.find((cond) => cond.type === "Ready")?.status === "True";
-				rows.push([node.metadata.name, ready ? "Ready" : "NotReady", "<none>", m.age(node.metadata.creationTimestamp), node.status?.nodeInfo?.kubeletVersion || "v1.36.0-webernetes"]);
+				rows.push([node.metadata.name, ready ? "Ready" : "NotReady", "<none>", m.age(node.metadata.creationTimestamp), node.status?.nodeInfo?.kubeletVersion || "v1.37.0-webernetes"]);
 			}
 			show(rows);
 		}
@@ -295,6 +303,18 @@ function createTerminal() {
 				rows.push(withNs([route.metadata.name, JSON.stringify(route.spec?.hostnames ?? []), accepted, m.age(route.metadata.creationTimestamp)], route));
 			}
 			show(rows);
+		}
+		if (resource === "horizontalpodautoscalers") {
+			const rows = [header(["NAME", "REFERENCE", "TARGETS", "MINPODS", "MAXPODS", "REPLICAS", "AGE"])];
+			for (const hpa of filter(m.listHPAs(flags.allNamespaces ? undefined : namespace))) {
+				const metric = hpa.status.currentMetrics[0];
+				const targets = metric ? `${metric.value}/${metric.target.averageValue ?? metric.target.value}${metric.target.type === "AverageValue" ? " (avg)" : ""}` : "<unknown>";
+				rows.push(withNs([hpa.metadata.name, `${hpa.spec.scaleTargetRef.kind}/${hpa.spec.scaleTargetRef.name}`, targets, hpa.spec.minReplicas ?? 1, hpa.spec.maxReplicas, hpa.status.currentReplicas ?? 0, m.age(hpa.metadata.creationTimestamp)], hpa));
+			}
+			show(rows);
+		}
+		if (resource === "priorityclasses") {
+			show([["NAME", "VALUE", "GLOBAL-DEFAULT", "AGE"], ...filter(m.listPriorityClasses()).map((pc) => [pc.metadata.name, pc.value, String(pc.globalDefault ?? false), m.age(pc.metadata.creationTimestamp)])]);
 		}
 		if (resource === "events") {
 			const events = await list((r) => c.api.corev1.listNamespacedEvent(r), () => c.api.corev1.listEventForAllNamespaces());
@@ -381,6 +401,28 @@ function createTerminal() {
 		await m.scaleDeployment(c, replicas);
 		ok(`deployment.apps/${m.DEPLOYMENT} scaled`);
 		if (replicas === 0) muted("The blog is now down. Very cloud native of you. 🫠");
+	}
+
+	// patch only knows the resize subresource, for in-place pod resize.
+	async function patch(positional, flags) {
+		const resource = RESOURCE_ALIASES[positional[0]];
+		const name = positional[1];
+		if (resource !== "pods" || !name || flags.subresource !== "resize" || !flags.patch) {
+			err("error: this kubectl only patches pod resources: kubectl patch pod <name> -n <namespace> --subresource resize -p '{\"spec\":{\"containers\":[{\"name\":\"app\",\"resources\":{\"requests\":{\"cpu\":\"1\"}}}]}}'");
+			return;
+		}
+		const { c, m } = await cluster();
+		const namespace = flags.namespace ?? m.NAMESPACE;
+		if (PROTECTED_NAMESPACES.includes(namespace)) {
+			err(`Error from server (Forbidden): admission webhook "no-fun-allowed.patricklaabs.dev" denied the request: the blog's pods keep their size`);
+			return;
+		}
+		m.startResizer(c);
+		try {
+			ok(await m.patchResize(c, namespace, name, flags.patch));
+		} catch (e) {
+			err(e.message);
+		}
 	}
 
 	async function logs(positional, flags) {
