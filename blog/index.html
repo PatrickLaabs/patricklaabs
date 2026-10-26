@@ -3,26 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    {{if .Post}}
-    <title>{{.Post.Title}} · {{.T.HomeTitle}}</title>
-    <meta name="description" content="{{.Post.Summary}}">
-    {{else if .Page}}
-    <title>{{.Page.Title}} · {{.T.HomeTitle}}</title>
-    <meta name="description" content="{{.Page.Summary}}">
-    {{else if .Title}}
-    <title>{{.Title}} · {{.T.HomeTitle}}</title>
-    <meta name="description" content="{{.Description}}">
-    {{else}}
-    <title>{{.T.SiteTitle}}</title>
-    <meta name="description" content="{{.T.SiteDescription}}">
-    {{end}}
+    {{$title := .T.SiteTitle}}{{$desc := .T.SiteDescription}}
+    {{if .Post}}{{$title = printf "%s · %s" .Post.Title .T.HomeTitle}}{{$desc = .Post.Description}}
+    {{else if .Page}}{{$title = printf "%s · %s" .Page.Title .T.HomeTitle}}{{$desc = .Page.Description}}
+    {{else if .Title}}{{$title = printf "%s · %s" .Title .T.HomeTitle}}{{$desc = .Description}}{{end}}
+    <title>{{$title}}</title>
+    <meta name="description" content="{{$desc}}">
+    {{if .NoIndex}}<meta name="robots" content="noindex">{{end}}
     {{with .Canonical}}<link rel="canonical" href="{{$.Origin}}{{.}}">{{end}}
     {{range .Alternates}}{{if .Exists}}<link rel="alternate" hreflang="{{.Code}}" href="{{$.Origin}}{{.URL}}">
     {{end}}{{end}}{{with index .Alternates 0}}{{if .Exists}}<link rel="alternate" hreflang="x-default" href="{{$.Origin}}{{.URL}}">{{end}}{{end}}
+    <link rel="alternate" type="application/atom+xml" title="{{.T.SiteTitle}}" href="{{.Origin}}{{.Lang.Prefix}}/feed.xml">
+    <meta property="og:site_name" content="{{.T.HomeTitle}}">
+    <meta property="og:title" content="{{if .Post}}{{.Post.Title}}{{else if .Page}}{{.Page.Title}}{{else}}{{$title}}{{end}}">
+    <meta property="og:description" content="{{$desc}}">
+    {{with .Canonical}}<meta property="og:url" content="{{$.Origin}}{{.}}">{{end}}
+    <meta property="og:image" content="{{.Origin}}/static/og.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="{{.T.SiteTitle}}">
+    <meta property="og:locale" content="{{.Lang.Locale}}">
+    {{range .Alternates}}{{if and .Exists (not .Current)}}<meta property="og:locale:alternate" content="{{.Locale}}">{{end}}{{end}}
+    {{with .Post}}<meta property="og:type" content="article">
+    <meta property="article:published_time" content="{{.Date.Format "2006-01-02"}}">
+    <meta property="article:author" content="{{$.Origin}}{{$.Lang.Prefix}}/about">
+    {{else}}<meta property="og:type" content="website">{{end}}
+    <meta name="twitter:card" content="summary_large_image">
+    {{with .JSONLD}}<script type="application/ld+json">{{.}}</script>{{end}}
+    <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
+    <link rel="icon" href="/favicon.ico" sizes="32x32">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
     <meta name="theme-color" content="#070b14">
     <meta name="htmx-config" content='{"includeIndicatorStyles":false}'>
     <link rel="stylesheet" href="/static/styles.css?v={{.AssetVersion}}">
-    <script src="/static/htmx.min.js?v={{.AssetVersion}}"></script>
+    <script src="/static/htmx.min.js?v={{.AssetVersion}}" defer></script>
     <script type="module" src="/static/js/main.js?v={{.AssetVersion}}"></script>
 </head>
 <body class="bg-grid text-slate-300 font-sans leading-relaxed antialiased min-h-screen selection:bg-k8s selection:text-white">
@@ -251,6 +265,25 @@
                     </button>
                 </div>
             </section>
+        </main>
+        {{else if .NotFound}}
+        <header class="mb-10">
+            <p class="font-mono text-sm text-cyan-400 mb-4">
+                <span class="text-emerald-400">patrick@cluster</span><span class="text-slate-500">:</span><span class="text-k8s-light">~</span><span class="text-slate-500">$</span>
+                <span class="text-slate-300">kubectl get page</span>
+            </p>
+            <p class="mb-4 font-mono text-sm text-rose-400">Error from server (NotFound): 404</p>
+            <h1 class="text-4xl sm:text-5xl font-extrabold text-white tracking-tight mb-4">{{.T.NotFoundTitle}}</h1>
+            <p class="text-lg text-slate-400 max-w-2xl">{{.T.NotFoundText}}</p>
+        </header>
+
+        <main>
+            <ul class="space-y-3 font-mono text-sm">
+                <li><a href="{{.Lang.Prefix}}/" class="text-slate-400 transition hover:text-white"><span class="text-slate-600">$</span> cd <span class="text-k8s-light">~</span></a></li>
+                <li><a href="{{.Lang.Prefix}}/posts" class="text-slate-400 transition hover:text-white"><span class="text-slate-600">~/</span>posts</a></li>
+                <li><a href="{{.Lang.Prefix}}/about" class="text-slate-400 transition hover:text-white"><span class="text-slate-600">~/</span>about</a></li>
+                <li><a href="{{.Lang.Prefix}}/playground" class="text-slate-400 transition hover:text-white"><span class="text-slate-600">~/</span>playground</a></li>
+            </ul>
         </main>
         {{else}}
         <header class="mb-10">

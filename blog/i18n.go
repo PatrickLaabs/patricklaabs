@@ -11,6 +11,7 @@ type Language struct {
 	Code   string // BCP 47 tag, used in <html lang> and post filenames
 	Prefix string // URL prefix; empty for the default language
 	Label  string // shown in the language switcher
+	Locale string // language and territory for OpenGraph, like en_US
 	Text   UIText
 	// months holds the abbreviated month names used in dates.
 	months [12]string
@@ -22,10 +23,11 @@ var languages = []Language{
 	{
 		Code:   "en",
 		Label:  "EN",
+		Locale: "en_US",
 		months: [12]string{"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"},
 		Text: UIText{
-			SiteTitle:             "Patrick's Blog · Kubernetes & Cloud Native",
-			SiteDescription:       "Notes on Kubernetes, cloud-native infrastructure, Go and platform engineering.",
+			SiteTitle:             "Patrick Laabs · Kubernetes & Cloud Native Blog",
+			SiteDescription:       "Patrick Laabs writes about Kubernetes, cloud-native infrastructure, Go and platform engineering, with hands-on examples that run live in your browser.",
 			SwitchLanguage:        "Diese Seite auf Deutsch",
 			BadgeTitle:            "Try to break it",
 			HeroTitle:             "Kubernetes, Cloud Native",
@@ -58,7 +60,9 @@ var languages = []Language{
 			LatestPosts:           "Latest posts",
 			OnlyIn:                "This post is only available in %s.",
 			OnlyInPage:            "This page is only available in %s.",
-			HomeTitle:             "Patrick's Blog",
+			HomeTitle:             "Patrick Laabs",
+			NotFoundTitle:         "Page not found",
+			NotFoundText:          "This page does not exist (anymore). Maybe one of these helps:",
 			TerminalTitle:         "Open a terminal (or press ~)",
 			TerminalPress:         "press",
 			BuiltWith:             "built with",
@@ -68,10 +72,11 @@ var languages = []Language{
 		Code:   "de",
 		Prefix: "/de",
 		Label:  "DE",
+		Locale: "de_DE",
 		months: [12]string{"Jan.", "Feb.", "März", "Apr.", "Mai", "Juni", "Juli", "Aug.", "Sep.", "Okt.", "Nov.", "Dez."},
 		Text: UIText{
-			SiteTitle:             "Patricks Blog · Kubernetes & Cloud Native",
-			SiteDescription:       "Notizen zu Kubernetes, Cloud-native Infrastruktur, Go und Platform Engineering.",
+			SiteTitle:             "Patrick Laabs · Blog zu Kubernetes & Cloud Native",
+			SiteDescription:       "Patrick Laabs schreibt über Kubernetes, Cloud-native Infrastruktur, Go und Platform Engineering, mit Beispielen, die live in deinem Browser laufen.",
 			SwitchLanguage:        "This page in English",
 			BadgeTitle:            "Versuch, es kaputt zu machen",
 			HeroTitle:             "Kubernetes, Cloud Native",
@@ -104,7 +109,9 @@ var languages = []Language{
 			LatestPosts:           "Neueste Beiträge",
 			OnlyIn:                "Diesen Beitrag gibt es nur auf %s.",
 			OnlyInPage:            "Diese Seite gibt es nur auf %s.",
-			HomeTitle:             "Patricks Blog",
+			HomeTitle:             "Patrick Laabs",
+			NotFoundTitle:         "Seite nicht gefunden",
+			NotFoundText:          "Diese Seite gibt es nicht (mehr). Vielleicht hilft dir eins davon weiter:",
 			TerminalTitle:         "Terminal öffnen (oder ~ drücken)",
 			TerminalPress:         "drücke",
 			BuiltWith:             "gebaut mit",
@@ -129,6 +136,7 @@ type UIText struct {
 	ChaosIntro, ChaosStart, ChaosSimulated, ChaosLazy string
 	TrafficIntro, TrafficStart, LatestPosts, OnlyIn   string
 	OnlyInPage, HomeTitle                             string
+	NotFoundTitle, NotFoundText                       string
 	// HomeIntro may contain markup, like WelcomeText.
 	HomeGreeting                                  string
 	HomeIntro                                     template.HTML
