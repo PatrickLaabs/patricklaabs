@@ -27,6 +27,10 @@ type Views struct {
 	logged  int64            // total at the last summary
 	pending map[string]int64 // views not yet added in Valkey
 
+	saved int64 // total of all views in Valkey at the last refresh
+	seen  int64 // total on this pod at the last refresh
+	known bool  // whether saved was read from Valkey at least once
+
 	addr   string // Valkey address; empty keeps the counts in memory only
 	client valkey.Client
 }
@@ -198,6 +202,45 @@ func (v *Views) stored(ctx context.Context) (map[string]int64, error) {
 		counts[p] = n
 	}
 	return counts, nil
+}
+
+// Refresh reads the total of all views from Valkey, so Total can answer
+// without asking Valkey on every page. It is meant to run right after Flush.
+func (v *Views) Refresh(ctx context.Context) error {
+	if v.addr == "" {
+		return nil
+	}
+	v.mu.Lock()
+	seen := v.total
+	v.mu.Unlock()
+	counts, err := v.stored(ctx)
+	if err != nil {
+		return err
+	}
+	var sum int64
+	for _, n := range counts {
+		sum += n
+	}
+	v.mu.Lock()
+	v.saved, v.seen, v.known = sum, seen, true
+	v.mu.Unlock()
+	return nil
+}
+
+// Total returns the number of views of all pages, for the footer: the total
+// in Valkey at the last refresh plus what this pod counted since, or the
+// views on this pod since it started if Valkey is not used. ok is false
+// while Valkey is used but was never read, so no misleading number shows.
+func (v *Views) Total() (n int64, ok bool) {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	if v.addr == "" {
+		return v.total, true
+	}
+	if !v.known {
+		return 0, false
+	}
+	return v.saved + v.total - v.seen, true
 }
 
 // Close closes the connection to Valkey, if there is one.

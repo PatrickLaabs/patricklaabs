@@ -108,6 +108,16 @@ func TestViewsValkey(t *testing.T) {
 	if got := c.Summary(ctx, 10); got != want {
 		t.Errorf("summary = %q, want %q", got, want)
 	}
+
+	// The footer total covers every replica, plus what this pod counted
+	// since the last refresh.
+	if err := a.Refresh(ctx); err != nil {
+		t.Fatal(err)
+	}
+	view(a, "GET", "/", browserAgent)
+	if n, ok := a.Total(); !ok || n != 5 {
+		t.Errorf("total = %d, %v; want 5, true", n, ok)
+	}
 }
 
 func TestViewsValkeyDown(t *testing.T) {
@@ -124,5 +134,42 @@ func TestViewsValkeyDown(t *testing.T) {
 	}
 	if got := v.Summary(ctx, 10); !strings.HasPrefix(got, "Page views since start (Valkey: ") {
 		t.Errorf("summary = %q, want the counts since start with the Valkey error", got)
+	}
+}
+
+func TestViewsTotal(t *testing.T) {
+	v := newViews("")
+	view(v, "GET", "/", browserAgent)
+	view(v, "GET", "/posts/x", browserAgent)
+	if n, ok := v.Total(); !ok || n != 2 {
+		t.Errorf("total without Valkey = %d, %v; want 2, true", n, ok)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	down := newViews("127.0.0.1:1")
+	defer down.Close()
+	view(down, "GET", "/", browserAgent)
+	if err := down.Refresh(ctx); err == nil {
+		t.Fatal("refresh from a closed port succeeded")
+	}
+	if _, ok := down.Total(); ok {
+		t.Error("total is shown although Valkey was never read")
+	}
+}
+
+func TestNumber(t *testing.T) {
+	en, _ := languageByCode("en")
+	de, _ := languageByCode("de")
+	for _, c := range []struct {
+		n      int64
+		en, de string
+	}{{0, "0", "0"}, {999, "999", "999"}, {1000, "1,000", "1.000"}, {1234567, "1,234,567", "1.234.567"}} {
+		if got := en.Number(c.n); got != c.en {
+			t.Errorf("en.Number(%d) = %q, want %q", c.n, got, c.en)
+		}
+		if got := de.Number(c.n); got != c.de {
+			t.Errorf("de.Number(%d) = %q, want %q", c.n, got, c.de)
+		}
 	}
 }

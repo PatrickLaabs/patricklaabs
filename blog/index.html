@@ -334,6 +334,10 @@
                 <span class="text-slate-600">context:</span> <span class="text-k8s-light">prod</span>
                 <span class="mx-1 text-slate-700">|</span>
                 <span class="text-slate-600">namespace:</span> <span class="text-cyan-400">blog</span>
+                {{with .Views}}
+                <span class="mx-1 text-slate-700">|</span>
+                <span title="{{$.T.ViewsTitle}}"><span class="text-slate-600">{{$.T.ViewsLabel}}</span> <span class="text-k8s-light">{{.}}</span></span>
+                {{end}}
                 <span class="mx-1 text-slate-700">|</span>
                 <span class="text-slate-600">{{.T.BuiltWith}}</span> Go · HTMX · ko
             </p>

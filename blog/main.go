@@ -500,6 +500,11 @@ func main() {
 	// A "Status" in data replaces the default 200 OK.
 	render := func(w http.ResponseWriter, r *http.Request, t *template.Template, data map[string]any) {
 		data["AssetVersion"] = version
+		if n, ok := views.Total(); ok {
+			if lang, ok := data["Lang"].(Language); ok {
+				data["Views"] = lang.Number(n)
+			}
+		}
 		if *dev {
 			data["Dev"] = true
 			data["Version"] = contentVersion(contentFS)
@@ -757,13 +762,17 @@ func main() {
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.ListenAndServe() }()
 
-	// Page views are added up in Valkey every few seconds, if it is used;
-	// a summary in the log is all there is to see of them.
+	// Page views are added up in Valkey every few seconds, if it is used,
+	// and the total for the footer is read back; a summary goes to the log.
 	flushViews := func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := views.Flush(ctx); err != nil {
 			log.Println("Error saving page views in Valkey:", err)
+			return
+		}
+		if err := views.Refresh(ctx); err != nil {
+			log.Println("Error reading page views from Valkey:", err)
 		}
 	}
 	logViews := func() {
