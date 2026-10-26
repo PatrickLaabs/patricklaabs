@@ -10,6 +10,7 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
+	"io"
 	"io/fs"
 	"log"
 	"net/http"
@@ -22,6 +23,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/klauspost/compress/gzhttp"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
@@ -96,21 +98,23 @@ func securityHeaders(next http.Handler) http.Handler {
 }
 
 type Post struct {
-	Slug    string
-	Lang    string
-	Title   string
-	Summary string
-	Date    time.Time
-	Content template.HTML
+	Slug        string
+	Lang        string
+	Title       string
+	Summary     string // first paragraph, shortened for the post list
+	Description string // first paragraph, shortened for search results
+	Date        time.Time
+	Content     template.HTML
 }
 
 // Page is a standalone Markdown page outside the post list, like /about.
 type Page struct {
-	Slug    string
-	Lang    string
-	Title   string
-	Summary string
-	Content template.HTML
+	Slug        string
+	Lang        string
+	Title       string
+	Summary     string
+	Description string
+	Content     template.HTML
 }
 
 // YearGroup is a slice of posts published in the same year, for the archive
@@ -213,7 +217,7 @@ func loadPosts(fsys fs.FS) Library {
 		}
 
 		doc := md.Parser().Parse(text.NewReader(data))
-		title, summary := postInfo(doc, data)
+		title, intro := postInfo(doc, data)
 		if title == "" {
 			title = slug
 		}
@@ -226,12 +230,13 @@ func loadPosts(fsys fs.FS) Library {
 			lib[slug] = map[string]Post{}
 		}
 		lib[slug][lang] = Post{
-			Slug:    slug,
-			Lang:    lang,
-			Title:   title,
-			Summary: summary,
-			Date:    date,
-			Content: template.HTML(buf.String()),
+			Slug:        slug,
+			Lang:        lang,
+			Title:       title,
+			Summary:     truncate(intro, 220),
+			Description: description(intro),
+			Date:        date,
+			Content:     template.HTML(buf.String()),
 		}
 	}
 	return lib
@@ -266,17 +271,17 @@ func loadPageFile(fsys fs.FS, name, slug string) (Page, error) {
 		return Page{}, err
 	}
 	doc := md.Parser().Parse(text.NewReader(data))
-	title, summary := postInfo(doc, data)
+	title, intro := postInfo(doc, data)
 	var buf bytes.Buffer
 	if err := md.Renderer().Render(&buf, data, doc); err != nil {
 		return Page{}, err
 	}
-	return Page{Slug: slug, Title: title, Summary: summary, Content: template.HTML(buf.String())}, nil
+	return Page{Slug: slug, Title: title, Summary: truncate(intro, 220), Description: description(intro), Content: template.HTML(buf.String())}, nil
 }
 
 // postInfo returns the text of a post's first top-level heading and of the
-// first paragraph after it, shortened for the post list.
-func postInfo(doc ast.Node, source []byte) (title, summary string) {
+// first paragraph after it.
+func postInfo(doc ast.Node, source []byte) (title, intro string) {
 	for n := doc.FirstChild(); n != nil; n = n.NextSibling() {
 		switch n := n.(type) {
 		case *ast.Heading:
@@ -284,15 +289,15 @@ func postInfo(doc ast.Node, source []byte) (title, summary string) {
 				title = plainText(n, source)
 			}
 		case *ast.Paragraph:
-			if summary == "" {
-				summary = truncate(plainText(n, source), 220)
+			if intro == "" {
+				intro = plainText(n, source)
 			}
 		}
-		if title != "" && summary != "" {
+		if title != "" && intro != "" {
 			break
 		}
 	}
-	return title, summary
+	return title, intro
 }
 
 // plainText concatenates the text inside n without any Markdown markup.
@@ -383,14 +388,22 @@ func assetVersion(fsys fs.FS) string {
 	return hex.EncodeToString(h.Sum(nil))[:12]
 }
 
-// origin returns the scheme and host the request was made to, for the
-// absolute URLs in canonical and hreflang links.
+// origin returns the scheme and host the request was made to, for absolute
+// URLs in dev mode, where the blog runs on localhost.
 func origin(r *http.Request) string {
 	scheme := "http"
 	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
 		scheme = "https"
 	}
 	return scheme + "://" + r.Host
+}
+
+// envOr returns the environment variable key, or fallback when it is unset.
+func envOr(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }
 
 // hashedAsset matches bundler output like js/chaos-EYWIP36I.js, whose name
@@ -401,6 +414,7 @@ func main() {
 	dev := flag.Bool("dev", false, "serve templates, posts and static files from disk and live-reload the browser on changes")
 	addr := flag.String("addr", ":8080", "address to listen on")
 	viewsEvery := flag.Duration("views-log-interval", time.Hour, "how often to log a summary of the page views")
+	baseURL := flag.String("base-url", envOr("BLOG_BASE_URL", defaultBaseURL), "scheme and host the blog is published at, for absolute URLs; dev mode uses the request's instead")
 	valkeyAddr := flag.String("valkey", os.Getenv("BLOG_VALKEY_ADDR"), "host:port of a Valkey server to add up page views in; empty keeps them in memory only")
 	flag.Parse()
 
@@ -456,8 +470,34 @@ func main() {
 		fileServer.ServeHTTP(w, r)
 	})
 
+	// base returns the scheme and host for absolute URLs.
+	base := func(r *http.Request) string {
+		if *dev {
+			return origin(r)
+		}
+		return strings.TrimRight(*baseURL, "/")
+	}
+
+	// Files browsers and crawlers expect at the root of the site.
+	serveStatic := func(name string) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			r2 := r.Clone(r.Context())
+			r2.URL.Path = "/static/" + name
+			mux.ServeHTTP(w, r2)
+		}
+	}
+	mux.HandleFunc("GET /favicon.ico", serveStatic("favicon.ico"))
+	mux.HandleFunc("GET /apple-touch-icon.png", serveStatic("apple-touch-icon.png"))
+
+	mux.HandleFunc("GET /robots.txt", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		io.WriteString(w, robotsTxt(base(r)))
+	})
+
 	// render executes the page template with data. In dev mode the template
 	// and posts are reloaded from disk first, so data may be built from them.
+	// A "Status" in data replaces the default 200 OK.
 	render := func(w http.ResponseWriter, r *http.Request, t *template.Template, data map[string]any) {
 		data["AssetVersion"] = version
 		if *dev {
@@ -473,6 +513,11 @@ func main() {
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-cache")
+		if status, ok := data["Status"].(int); ok {
+			w.WriteHeader(status)
+			buf.WriteTo(w)
+			return
+		}
 		buf.WriteTo(w)
 		views.Count(r)
 	}
@@ -508,11 +553,46 @@ func main() {
 		return map[string]any{
 			"Lang":       lang,
 			"T":          lang.Text,
-			"Origin":     origin(r),
+			"Origin":     base(r),
+			"Canonical":  lang.Prefix + path,
 			"Alternates": alts,
 		}
 	}
 	always := func(Language) bool { return true }
+
+	// notFound shows the 404 page in the language of the requested path.
+	notFound := func(w http.ResponseWriter, r *http.Request) {
+		t, _, ok := current(w)
+		if !ok {
+			return
+		}
+		lang := languageOfPath(r.URL.Path)
+		data := pageData(r, lang, "/", func(Language) bool { return false })
+		delete(data, "Canonical")
+		data["Title"] = lang.Text.NotFoundTitle
+		data["Description"] = lang.Text.NotFoundText
+		data["NotFound"] = true
+		data["NoIndex"] = true
+		data["Status"] = http.StatusNotFound
+		render(w, r, t, data)
+	}
+	mux.HandleFunc("/", notFound)
+
+	mux.HandleFunc("GET /sitemap.xml", func(w http.ResponseWriter, r *http.Request) {
+		_, lib, ok := current(w)
+		if !ok {
+			return
+		}
+		var buf bytes.Buffer
+		if err := writeSitemap(&buf, base(r), lib); err != nil {
+			log.Println("Error writing sitemap:", err)
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		buf.WriteTo(w)
+	})
 
 	for _, lang := range languages {
 		mux.HandleFunc(lang.Prefix+"/{$}", func(w http.ResponseWriter, r *http.Request) {
@@ -524,6 +604,7 @@ func main() {
 			data := pageData(r, lang, "/", always)
 			data["Home"] = true
 			data["Posts"] = posts
+			data["JSONLD"] = siteJSONLD(base(r), lang)
 			render(w, r, t, data)
 		})
 
@@ -561,7 +642,7 @@ func main() {
 			slug := r.PathValue("slug")
 			p, ok := lib.pick(slug, lang.Code)
 			if !ok {
-				http.NotFound(w, r)
+				notFound(w, r)
 				return
 			}
 			data := pageData(r, lang, "/posts/"+slug, func(l Language) bool {
@@ -569,6 +650,7 @@ func main() {
 				return ok
 			})
 			data["Post"] = p
+			data["JSONLD"] = postJSONLD(base(r), base(r)+lang.Prefix+"/posts/"+slug, p)
 			if p.Lang != lang.Code {
 				// Untranslated: show the original with this language's
 				// interface, and point search engines at the original.
@@ -579,8 +661,28 @@ func main() {
 			render(w, r, t, data)
 		})
 
+		mux.HandleFunc("GET "+lang.Prefix+"/feed.xml", func(w http.ResponseWriter, r *http.Request) {
+			_, lib, ok := current(w)
+			if !ok {
+				return
+			}
+			var buf bytes.Buffer
+			if err := writeFeed(&buf, base(r), lang, lib); err != nil {
+				log.Println("Error writing feed:", err)
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
+			}
+			w.Header().Set("Content-Type", "application/atom+xml; charset=utf-8")
+			w.Header().Set("Cache-Control", "public, max-age=3600")
+			buf.WriteTo(w)
+		})
+
 		if lang.Prefix != "" {
 			mux.Handle("GET "+lang.Prefix, http.RedirectHandler(lang.Prefix+"/", http.StatusMovedPermanently))
+		}
+		// One URL per page: a trailing slash redirects to the URL without.
+		for _, path := range []string{"/posts", "/about", "/playground"} {
+			mux.Handle("GET "+lang.Prefix+path+"/{$}", http.RedirectHandler(lang.Prefix+path, http.StatusMovedPermanently))
 		}
 	}
 
@@ -641,7 +743,7 @@ func main() {
 
 	srv := &http.Server{
 		Addr:              *addr,
-		Handler:           securityHeaders(mux),
+		Handler:           gzhttp.GzipHandler(securityHeaders(mux)),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      10 * time.Second,
