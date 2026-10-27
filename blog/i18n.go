@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"html/template"
+	"strconv"
 	"time"
 )
 
@@ -66,6 +67,8 @@ var languages = []Language{
 			TerminalTitle:         "Open a terminal (or press ~)",
 			TerminalPress:         "press",
 			BuiltWith:             "built with",
+			ViewsLabel:            "views:",
+			ViewsTitle:            "Page views of all pages of this blog, counted without cookies or tracking",
 		},
 	},
 	{
@@ -115,6 +118,8 @@ var languages = []Language{
 			TerminalTitle:         "Terminal öffnen (oder ~ drücken)",
 			TerminalPress:         "drücke",
 			BuiltWith:             "gebaut mit",
+			ViewsLabel:            "Aufrufe:",
+			ViewsTitle:            "Seitenaufrufe aller Seiten dieses Blogs, gezählt ohne Cookies oder Tracking",
 		},
 	},
 }
@@ -147,6 +152,7 @@ type UIText struct {
 	PlaygroundTitle, PlaygroundDescription        string
 	PlaygroundIntro, TerminalIntro, TerminalStart string
 	TerminalTitle, TerminalPress, BuiltWith       string
+	ViewsLabel, ViewsTitle                        string
 }
 
 func defaultLanguage() Language { return languages[0] }
@@ -158,6 +164,19 @@ func languageByCode(code string) (Language, bool) {
 		}
 	}
 	return Language{}, false
+}
+
+// Number formats n with thousands separators, like "12,345" or "12.345".
+func (l Language) Number(n int64) string {
+	sep := ","
+	if l.Code == "de" {
+		sep = "."
+	}
+	s := strconv.FormatInt(n, 10)
+	for i := len(s) - 3; i > 0 && s[i-1] != '-'; i -= 3 {
+		s = s[:i] + sep + s[i:]
+	}
+	return s
 }
 
 // Date formats t like "Oct 20, 2026" or "20. Okt. 2026".
