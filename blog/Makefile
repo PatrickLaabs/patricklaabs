@@ -2,7 +2,7 @@ TAILWIND := npx --yes tailwindcss@3.4.19 -i ./assets/input.css -o ./static/style
 PORT ?= 8080
 
 .DEFAULT_GOAL := help
-.PHONY: help dev serve css css-watch js js-watch new-post translate-post check build-container
+.PHONY: help dev serve css css-watch js js-watch new-post tags translate-post check build-container
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
@@ -37,13 +37,18 @@ js-watch: web/node_modules ## Rebundle the JavaScript whenever web/src changes
 	cd web && npm run --silent watch
 
 # English posts have no language suffix; others end in .<lang>.md, e.g. .de.md.
-new-post: ## Create a new post: make new-post TITLE="My new post" [LANG=de]
-	@test -n "$(TITLE)" || { echo 'usage: make new-post TITLE="My new post" [LANG=de]'; exit 1; }
+new-post: ## Create a new post: make new-post TITLE="My new post" [TAGS="kubernetes, probes"] [LANG=de]
+	@test -n "$(TITLE)" || { echo 'usage: make new-post TITLE="My new post" [TAGS="kubernetes, probes"] [LANG=de]'; exit 1; }
 	@slug=$$(echo "$(TITLE)" | sed 's/ä/ae/g; s/Ä/Ae/g; s/ö/oe/g; s/Ö/Oe/g; s/ü/ue/g; s/Ü/Ue/g; s/ß/ss/g' | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+|-+$$//g'); \
 	file="posts/$$(date +%Y-%m-%d)-$$slug$(if $(filter-out en,$(LANG)),.$(LANG)).md"; \
 	test ! -e "$$file" || { echo "$$file already exists"; exit 1; }; \
-	printf '# %s\n\nWrite your post here.\n' "$(TITLE)" > "$$file"; \
-	echo "Created $$file. Read WRITING.md before you start writing."
+	printf -- '---\ntags: [%s]\n---\n\n# %s\n\nWrite your post here.\n' "$(TAGS)" "$(TITLE)" > "$$file"; \
+	echo "Created $$file. Read WRITING.md before you start writing."; \
+	test -n "$(TAGS)" || echo "Add tags to its front matter; make tags lists the ones in use."
+
+# Tags come from the front matter of the English posts, most used first.
+tags: ## List the tags in use and how many posts carry each, to reuse them in new posts
+	@awk 'FNR == 2 && sub(/^tags: *\[/, "") && sub(/\] *$$/, "") { n = split($$0, t, / *, */); for (i = 1; i <= n; i++) if (t[i] != "") c[t[i]]++ } END { for (k in c) printf "%4d  %s\n", c[k], k }' $$(ls posts/*.md | grep -v '\.[a-z][a-z]\.md$$') | sort -k1,1nr -k2
 
 # A translation shares the original's slug, so the language switcher and the
 # hreflang links can pair them up. It starts as a copy of the original.

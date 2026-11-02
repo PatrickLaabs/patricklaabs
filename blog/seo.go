@@ -19,7 +19,7 @@ const author = "Patrick Laabs"
 // authorProfiles are other pages about the author, for structured data.
 var authorProfiles = []string{"https://github.com/PatrickLaabs"}
 
-// staticPaths are the pages besides posts, without a language prefix. Every
+// staticPaths are the pages besides posts and tags, without a language prefix. Every
 // one of them exists in every language.
 var staticPaths = []string{"/", "/posts", "/about", "/playground"}
 
@@ -100,6 +100,9 @@ func writeSitemap(w io.Writer, base string, lib Library) error {
 			lastMod = newest
 		}
 		add(path, func(Language) bool { return true }, lastMod)
+	}
+	for _, tc := range lib.tags(defaultLanguage().Code) {
+		add("/tags/"+tc.Name, func(l Language) bool { return lib.hasTag(tc.Name, l.Code) }, tc.Newest)
 	}
 	for _, p := range posts {
 		add("/posts/"+p.Slug, func(l Language) bool {
@@ -217,7 +220,7 @@ func person(base, lang string) map[string]any {
 // use for rich results like the publish date and author.
 func postJSONLD(base, url string, p Post) map[string]any {
 	date := p.Date.Format(time.DateOnly)
-	return map[string]any{
+	ld := map[string]any{
 		"@context":         "https://schema.org",
 		"@type":            "BlogPosting",
 		"headline":         p.Title,
@@ -231,6 +234,10 @@ func postJSONLD(base, url string, p Post) map[string]any {
 		"author":           person(base, p.Lang),
 		"publisher":        person(base, p.Lang),
 	}
+	if len(p.Tags) > 0 {
+		ld["keywords"] = p.Tags
+	}
+	return ld
 }
 
 // siteJSONLD is the schema.org WebSite of the front page in lang.

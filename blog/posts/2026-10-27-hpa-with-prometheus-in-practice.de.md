@@ -1,3 +1,7 @@
+---
+tags: [kubernetes, autoscaling, prometheus, keda, observability]
+---
+
 # Autoscaling mit Prometheus-Metriken in der Praxis
 
 Der HPA kann Prometheus nicht selbst abfragen. Dieser Post zeigt Schritt für Schritt, wie du beides im echten Cluster verbindest, mit fertigem YAML für Requests pro Sekunde, Queue-Länge und Scale to Zero.

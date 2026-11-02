@@ -1,3 +1,7 @@
+---
+tags: [kubernetes, release-notes, autoscaling, resource-management, live-demo]
+---
+
 # Kubernetes v1.37, live
 
 Kubernetes v1.37 can shut down idle workloads completely and give running pods more CPU without restarting them. In this post you try both, step by step and live in your browser, and learn when each one helps.

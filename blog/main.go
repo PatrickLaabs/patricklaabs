@@ -14,6 +14,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"regexp"
@@ -104,7 +105,9 @@ type Post struct {
 	Summary     string // first paragraph, shortened for the post list
 	Description string // first paragraph, shortened for search results
 	Date        time.Time
+	Tags        []string // from the front matter; the same in every language
 	Content     template.HTML
+	text        string // the whole post as lowercase plain text, for search
 }
 
 // Page is a standalone Markdown page outside the post list, like /about.
@@ -216,6 +219,11 @@ func loadPosts(fsys fs.FS) Library {
 			continue
 		}
 
+		fm, data, err := splitFrontMatter(data)
+		if err != nil {
+			log.Printf("Skipping post %s: %v", entry.Name(), err)
+			continue
+		}
 		doc := md.Parser().Parse(text.NewReader(data))
 		title, intro := postInfo(doc, data)
 		if title == "" {
@@ -236,7 +244,9 @@ func loadPosts(fsys fs.FS) Library {
 			Summary:     truncate(intro, 220),
 			Description: description(intro),
 			Date:        date,
+			Tags:        fm.Tags,
 			Content:     template.HTML(buf.String()),
+			text:        searchText(doc, data),
 		}
 	}
 	return lib
@@ -426,7 +436,7 @@ func main() {
 	}
 
 	loadTemplate := func() (*template.Template, error) {
-		return template.ParseFS(contentFS, "index.html")
+		return template.New("index.html").Funcs(templateFuncs).ParseFS(contentFS, "index.html")
 	}
 
 	tmpl, err := loadTemplate()
@@ -510,14 +520,32 @@ func main() {
 			data["Version"] = contentVersion(contentFS)
 			data["AssetVersion"] = assetVersion(contentFS)
 		}
+		// HTMX asks for parts of a page, like the post list while someone
+		// types a search; history restores need the whole page again.
+		fragment, _ := data["Fragment"].(string)
+		if r.Header.Get("HX-History-Restore-Request") == "true" {
+			fragment = ""
+		}
 		var buf bytes.Buffer
-		if err := t.Execute(&buf, data); err != nil {
+		var err error
+		if fragment != "" {
+			err = t.ExecuteTemplate(&buf, fragment, data)
+		} else {
+			err = t.Execute(&buf, data)
+		}
+		if err != nil {
 			log.Println("Error rendering template:", err)
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Add("Vary", "HX-Request")
+		if fragment != "" {
+			// A fragment is part of a page that was counted already.
+			buf.WriteTo(w)
+			return
+		}
 		if status, ok := data["Status"].(int); ok {
 			w.WriteHeader(status)
 			buf.WriteTo(w)
@@ -613,18 +641,84 @@ func main() {
 			render(w, r, t, data)
 		})
 
-		mux.HandleFunc("GET "+lang.Prefix+"/posts", func(w http.ResponseWriter, r *http.Request) {
+		// postList serves the post overview, all posts or those with tag,
+		// filtered by the search query in ?q=. While someone types, HTMX
+		// fetches only the list of results.
+		postList := func(w http.ResponseWriter, r *http.Request, tag string) {
 			t, lib, ok := current(w)
 			if !ok {
 				return
 			}
-			posts := lib.list(lang.Code)
-			data := pageData(r, lang, "/posts", always)
+			all := lib.list(lang.Code)
+			tags := lib.tags(lang.Code)
+			path := "/posts"
+			has := always
+			posts := all
+			if tag != "" {
+				posts = withTag(all, tag)
+				if len(posts) == 0 {
+					notFound(w, r)
+					return
+				}
+				path = "/tags/" + tag
+				has = func(l Language) bool { return lib.hasTag(tag, l.Code) }
+			}
+			query := strings.TrimSpace(r.URL.Query().Get("q"))
+			if len(query) > maxQuery {
+				query = strings.ToValidUTF8(query[:maxQuery], "")
+			}
+			data := pageData(r, lang, path, has)
+			data["PostsNav"] = true
+			data["Path"] = lang.Prefix + path
 			data["Title"] = lang.Text.PostsTitle
 			data["Description"] = lang.Text.PostsDescription
+			if tag != "" {
+				data["Tag"] = tag
+				data["Title"] = fmt.Sprintf(lang.Text.TagTitle, tag)
+				data["Description"] = fmt.Sprintf(lang.Text.TagDescription, tag)
+			}
+			data["Tags"] = tags
+			data["Total"] = len(posts)
+			if query != "" {
+				// Search results are not pages of their own for search
+				// engines.
+				data["NoIndex"] = true
+				delete(data, "Canonical")
+				data["Query"] = query
+				posts = search(posts, query)
+			} else {
+				data["Years"] = groupByYear(posts)
+			}
 			data["Posts"] = posts
-			data["Years"] = groupByYear(posts)
+			if r.Header.Get("HX-Request") == "true" {
+				data["Fragment"] = "post-results"
+				// Keep the address bar in step with the search, so the
+				// results can be shared and survive a reload.
+				u := lang.Prefix + path
+				if query != "" {
+					u += "?" + url.Values{"q": {query}}.Encode()
+				}
+				w.Header().Set("HX-Replace-Url", u)
+			}
 			render(w, r, t, data)
+		}
+
+		mux.HandleFunc("GET "+lang.Prefix+"/posts", func(w http.ResponseWriter, r *http.Request) {
+			postList(w, r, "")
+		})
+
+		mux.HandleFunc("GET "+lang.Prefix+"/tags/{tag}", func(w http.ResponseWriter, r *http.Request) {
+			postList(w, r, r.PathValue("tag"))
+		})
+		// There is no page with every tag; the post list shows them all.
+		mux.Handle("GET "+lang.Prefix+"/tags", http.RedirectHandler(lang.Prefix+"/posts", http.StatusMovedPermanently))
+		mux.Handle("GET "+lang.Prefix+"/tags/{$}", http.RedirectHandler(lang.Prefix+"/posts", http.StatusMovedPermanently))
+		mux.HandleFunc("GET "+lang.Prefix+"/tags/{tag}/{$}", func(w http.ResponseWriter, r *http.Request) {
+			if !validTag.MatchString(r.PathValue("tag")) {
+				notFound(w, r)
+				return
+			}
+			http.Redirect(w, r, lang.Prefix+"/tags/"+r.PathValue("tag"), http.StatusMovedPermanently)
 		})
 
 		mux.HandleFunc("GET "+lang.Prefix+"/playground", func(w http.ResponseWriter, r *http.Request) {
