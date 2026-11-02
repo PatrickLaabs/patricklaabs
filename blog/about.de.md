@@ -1,46 +1,62 @@
 # Über mich
 
-Ich bin Patrick, ein Go-Entwickler, der Cloud-native Infrastruktur baut und betreibt. Der Großteil meiner Arbeit dreht sich um Kubernetes und Cluster API: Cluster deklarativ bereitstellen, Controller schreiben und Plattformen im besten Sinne langweilig halten. Immer am Lernen, immer koffeiniert ☕.
+Ich bin Patrick, DevOps Engineer und Go-Entwickler, und baue und betreibe Cloud-native Infrastruktur. Der Großteil meiner Arbeit dreht sich um Kubernetes und Cluster API: Cluster deklarativ bereitstellen, Controller schreiben und Plattformen im besten Sinne langweilig halten. Immer am Lernen, immer koffeiniert ☕.
 
-<!-- TODO(patrick): ein oder zwei Sätze zu deiner aktuellen Rolle und wo du wohnst. -->
+Seit 2022 bin ich DevOps Engineer bei der EITCO in Bonn und konzipiere und entwickle dort unsere hauseigene Kubernetes-Plattform. Ich wohne in der Nähe von Bonn.
 
 ## Open Source
 
 - **Mitglied** der GitHub-Organisation [Kubernetes](https://github.com/kubernetes)
-- **Maintainer** von [CAAPC](https://github.com/eitco/cluster-api-addon-provider-cdk8s), dem Cluster-API-Add-on-Provider für cdk8s
+- **Maintainer** von [CAAPC](https://github.com/eitco/cluster-api-addon-provider-cdk8s), dem Cluster-API-Add-on-Provider für cdk8s: Kubernetes-Deployments in Go, TypeScript, Java oder Python schreiben und auf die gewünschten Ziel-Cluster ausrollen
 - **Contributor** bei [Kubernetes](https://github.com/kubernetes/kubernetes), [Cluster API](https://github.com/kubernetes-sigs/cluster-api), [Cluster API Provider vSphere](https://github.com/kubernetes-sigs/cluster-api-provider-vsphere) und [Cluster API Provider Harvester](https://github.com/rancher-sandbox/cluster-api-provider-harvester)
 
 ## Berufserfahrung
 
-<!-- TODO(patrick): ersetze die Platzhalter unten durch deine Stationen, die neueste zuerst. -->
+### DevOps Engineer · EITCO
 
-### Rolle · Firma
+*Jan. 2022 – heute · Bonn*
 
-*20XX – heute*
+- Konzeption und Entwicklung einer hauseigenen Kubernetes-Plattform
+- Software und Automatisierung in Go
+- Weiterentwicklung der CI/CD-Pipelines mit Jenkins und GitHub Actions
+- Serverkonfiguration mit Puppet
+- Moderation des wöchentlichen internen Kubernetes-Meetings für den Wissensaustausch im Team
+- 1st- und 2nd-Level-Support, von der Analyse bis zur Behebung
 
-Woran du arbeitest, der Stack und ein Ergebnis, auf das du stolz bist.
+### IT-Support im After-Sales · Toshiba Tec Germany Imaging Systems
 
-### Rolle · Firma
+*Apr. 2019 – Dez. 2021 · bundesweit*
 
-*20XX – 20XX*
+- Umsetzung der verkauften Spezifikationen unserer eigenen Softwarelösungen beim Kunden
+- Erstellung und Pflege der Installationsdokumentation
+- 1st- und 2nd-Level-Support für Kunden in ganz NRW, vor Ort und remote
 
-Woran du gearbeitet hast, der Stack und ein Ergebnis, auf das du stolz bist.
+### Kundendiensttechniker · Schwarz Direkt und TA Triumph-Adler
+
+*Juni 2014 – Apr. 2019 · Bonn*
+
+Installation, Wartung und Reparatur von Druck- und Kopiersystemen beim Kunden sowie interne Schulungen für Kolleginnen und Kollegen.
 
 ## Ausbildung
 
-<!-- TODO(patrick): Abschlüsse, Ausbildungen oder Zertifizierungen (CKA, CKAD, …), die neueste zuerst. -->
+### Meister Informationstechniker · Handwerkskammer zu Köln
 
-### Abschluss oder Zertifizierung · Institution
+*2017*
 
-*20XX*
+Außerdem an der Handwerkskammer zu Köln: Bachelor Professional (2015 – 2017), Fachkaufmann (2015) und Ausbildereignung (AEVO, 2015).
+
+### Ausbildung zum Büroinformationselektroniker · TA Triumph-Adler
+
+*Aug. 2010 – Jan. 2014 · Bonn*
 
 ## Tech-Stack
 
 | Bereich | Tools |
 | --- | --- |
 | Sprachen | Go, C |
-| Plattform | Kubernetes, Cluster API, Docker, Linux |
-| Delivery | GitHub Actions, ko, GitOps |
+| Plattform | Kubernetes (On-Prem, vSphere, GCP, Azure), Cluster API, Docker, Linux |
+| Delivery | GitHub Actions, Jenkins, ko, GitOps, Argo CD |
+| Konfiguration | Puppet, Ansible |
 
 ## Kontakt
 
