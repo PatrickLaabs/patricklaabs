@@ -1,3 +1,7 @@
+---
+tags: [blog, go, htmx]
+---
+
 # Hallo, Welt!
 
 Willkommen auf meinem Blog. Hier schreibe ich über Kubernetes und Cloud-Themen, Schritt für Schritt erklärt, sodass du auch als Einsteiger folgen kannst.

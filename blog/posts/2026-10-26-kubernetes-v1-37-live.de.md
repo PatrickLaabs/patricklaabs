@@ -1,3 +1,7 @@
+---
+tags: [kubernetes, release-notes, autoscaling, resource-management, live-demo]
+---
+
 # Kubernetes v1.37, live
 
 Kubernetes v1.37 kann ungenutzte Workloads komplett herunterfahren und laufenden Pods mehr CPU geben, ohne sie neu zu starten. In diesem Post probierst du beides Schritt für Schritt live im Browser aus.

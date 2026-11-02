@@ -1,3 +1,7 @@
+---
+tags: [kubernetes, probes, reliability, troubleshooting, live-demo]
+---
+
 # Readiness- vs. Liveness-Probes, live
 
 Kubernetes erkennt, ob dein Container läuft, aber nicht, ob deine App wirklich funktioniert. Probes schließen diese Lücke. In diesem Post siehst du Schritt für Schritt und live im Browser, welche Probe du wann brauchst und was ohne sie schiefgeht.

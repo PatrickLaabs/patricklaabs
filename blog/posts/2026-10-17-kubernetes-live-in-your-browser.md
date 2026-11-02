@@ -1,3 +1,7 @@
+---
+tags: [kubernetes, basics, troubleshooting, live-demo]
+---
+
 # Kubernetes, live in your browser
 
 Try Kubernetes yourself without installing anything: start an app, make it reachable, watch Kubernetes repair it and learn to read two common errors. Everything runs in this browser tab.

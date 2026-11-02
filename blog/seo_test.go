@@ -61,6 +61,9 @@ func TestSitemap(t *testing.T) {
 	for slug := range lib {
 		want = append(want, "https://example.com/posts/"+slug, "https://example.com/de/posts/"+slug)
 	}
+	for _, tc := range lib.tags("en") {
+		want = append(want, "https://example.com/tags/"+tc.Name, "https://example.com/de/tags/"+tc.Name)
+	}
 	for _, w := range want {
 		if !locs[w] {
 			t.Errorf("sitemap is missing %s", w)

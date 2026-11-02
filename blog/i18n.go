@@ -69,6 +69,15 @@ var languages = []Language{
 			BuiltWith:             "built with",
 			ViewsLabel:            "views:",
 			ViewsTitle:            "Page views of all pages of this blog, counted without cookies or tracking",
+			TagsLabel:             "Topics",
+			AllPosts:              "all",
+			TagTitle:              "Posts tagged #%s",
+			TagDescription:        "All posts on this blog about %s, newest first.",
+			SearchLabel:           "Search posts",
+			SearchPlaceholder:     "Search posts, e.g. probes",
+			SearchButton:          "Search",
+			SearchResults:         "Search results",
+			NoResults:             "No post matches “%s”. Try a shorter word or pick a topic above.",
 		},
 	},
 	{
@@ -120,6 +129,15 @@ var languages = []Language{
 			BuiltWith:             "gebaut mit",
 			ViewsLabel:            "Aufrufe:",
 			ViewsTitle:            "Seitenaufrufe aller Seiten dieses Blogs, gezählt ohne Cookies oder Tracking",
+			TagsLabel:             "Themen",
+			AllPosts:              "alle",
+			TagTitle:              "Beiträge zum Thema #%s",
+			TagDescription:        "Alle Beiträge dieses Blogs zum Thema %s, die neuesten zuerst.",
+			SearchLabel:           "Beiträge durchsuchen",
+			SearchPlaceholder:     "Beiträge durchsuchen, z. B. Probes",
+			SearchButton:          "Suchen",
+			SearchResults:         "Suchergebnisse",
+			NoResults:             "Kein Beitrag passt zu „%s“. Versuch ein kürzeres Wort oder wähl oben ein Thema.",
 		},
 	},
 }
@@ -153,6 +171,10 @@ type UIText struct {
 	PlaygroundIntro, TerminalIntro, TerminalStart string
 	TerminalTitle, TerminalPress, BuiltWith       string
 	ViewsLabel, ViewsTitle                        string
+	// TagTitle and TagDescription take the tag, NoResults the query.
+	TagsLabel, AllPosts, TagTitle, TagDescription string
+	SearchLabel, SearchPlaceholder, SearchButton  string
+	SearchResults, NoResults                      string
 }
 
 func defaultLanguage() Language { return languages[0] }

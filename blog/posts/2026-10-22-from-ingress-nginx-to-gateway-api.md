@@ -1,3 +1,7 @@
+---
+tags: [kubernetes, networking, gateway-api, migration, live-demo]
+---
+
 # From ingress-nginx to Gateway API, live
 
 ingress-nginx, the most widely used way to route web traffic into Kubernetes, gets no more security patches. This post shows step by step, live in your browser, how to move a small shop to its successor, Gateway API, and which pitfalls to watch for.

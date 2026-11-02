@@ -15,6 +15,22 @@ Every post exists in English and German (`posts/<date>-<slug>.md` and `posts/<da
    * **What should they see**, and what does it mean?
 5. **Summary:** a short list of the takeaways.
 
+## Tags
+
+Tags help readers find posts on the same topic: every tag gets its own page at `/tags/<tag>`, the post list shows them as filters, and the search looks at them too. Each post lists its tags in the front matter, the block between two `---` lines at the very top of the file:
+
+```markdown
+---
+tags: [kubernetes, probes, live-demo]
+---
+
+# Readiness vs. liveness probes, live
+```
+
+* Use three to five tags: the broad area (`kubernetes`, `go`), the specific topic (`probes`, `gateway-api`) and, if it fits, the kind of post (`live-demo` for posts with live examples, `release-notes`).
+* Reuse existing tags before you invent new ones. `make tags` lists the ones in use; `make new-post TITLE="…" TAGS="kubernetes, probes"` puts them in the new file.
+* Tags are lowercase English words joined by hyphens, like `gateway-api`. They are the same in the English and German version of a post, because they are also part of the URL. `make translate-post` copies them, and `make check` fails if a post has no tags or its versions differ.
+
 ## Language
 
 * Explain every term the first time it appears, in one short clause: "the kubelet (the Kubernetes agent on every node that starts and watches containers)". Don't assume the reader knows Service, endpoint, annotation, canary and so on.

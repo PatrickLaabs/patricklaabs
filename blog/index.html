@@ -27,7 +27,8 @@
     {{with .Post}}<meta property="og:type" content="article">
     <meta property="article:published_time" content="{{.Date.Format "2006-01-02"}}">
     <meta property="article:author" content="{{$.Origin}}{{$.Lang.Prefix}}/about">
-    {{else}}<meta property="og:type" content="website">{{end}}
+    {{range .Tags}}<meta property="article:tag" content="{{.}}">
+    {{end}}    {{else}}<meta property="og:type" content="website">{{end}}
     <meta name="twitter:card" content="summary_large_image">
     {{with .JSONLD}}<script type="application/ld+json">{{.}}</script>{{end}}
     <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
@@ -52,7 +53,7 @@
             </a>
             <div class="flex items-center gap-4">
             <ul class="hidden sm:flex items-center gap-4">
-                <li><a href="{{.Lang.Prefix}}/posts" class="transition hover:text-white {{if .Years}}text-white{{else}}text-slate-400{{end}}"{{if .Years}} aria-current="page"{{end}}><span class="text-slate-600">~/</span>posts</a></li>
+                <li><a href="{{.Lang.Prefix}}/posts" class="transition hover:text-white {{if .PostsNav}}text-white{{else}}text-slate-400{{end}}"{{if and .PostsNav (not .Tag)}} aria-current="page"{{end}}><span class="text-slate-600">~/</span>posts</a></li>
                 <li><a href="{{.Lang.Prefix}}/about" class="transition hover:text-white {{if .Page}}text-white{{else}}text-slate-400{{end}}"{{if .Page}} aria-current="page"{{end}}><span class="text-slate-600">~/</span>about</a></li>
                 <li><a href="{{.Lang.Prefix}}/playground" class="transition hover:text-white {{if .Playground}}text-white{{else}}text-slate-400{{end}}"{{if .Playground}} aria-current="page"{{end}}><span class="text-slate-600">~/</span>playground</a></li>
             </ul>
@@ -86,6 +87,12 @@
                     {{.Content}}
                 </div>
             </article>
+            {{with .Tags}}
+            <nav aria-label="{{$.T.TagsLabel}}" class="mt-6 flex flex-wrap items-center gap-1.5 font-mono text-xs">
+                <span class="mr-1 text-slate-500">{{$.T.TagsLabel}}:</span>
+                {{range .}}<a href="{{$.Lang.Prefix}}/tags/{{.}}" class="rounded border border-cluster-600 px-2 py-1 text-slate-400 transition hover:border-k8s hover:text-white"><span class="text-k8s">#</span>{{.}}</a>{{end}}
+            </nav>
+            {{end}}
         </main>
         {{else with .Page}}
         <main>
@@ -292,35 +299,26 @@
             </p>
             <p class="font-mono text-sm text-cyan-400 mb-4">
                 <span class="text-emerald-400">patrick@cluster</span><span class="text-slate-500">:</span><span class="text-k8s-light">~</span><span class="text-slate-500">$</span>
-                <span class="text-slate-300 cursor">kubectl get posts -n blog</span>
+                <span class="text-slate-300 cursor">kubectl get posts -n blog{{with .Tag}} -l tag={{.}}{{end}}</span>
             </p>
-            <h1 class="text-4xl sm:text-5xl font-extrabold text-white tracking-tight mb-4">{{.T.PostsTitle}}</h1>
-            <p class="text-lg text-slate-400 max-w-2xl">{{.T.HeroIntro}}</p>
+            <h1 class="text-4xl sm:text-5xl font-extrabold text-white tracking-tight mb-4">{{if .Tag}}{{.Title}}{{else}}{{.T.PostsTitle}}{{end}}</h1>
+            <p class="text-lg text-slate-400 max-w-2xl">{{if .Tag}}{{.Description}}{{else}}{{.T.HeroIntro}}{{end}}</p>
         </header>
 
         <main>
-            {{if .Posts}}
-            <section id="posts">
-                <div class="flex items-center justify-between mb-4 font-mono text-xs uppercase tracking-wider text-slate-500">
-                    <span>{{.T.LatestPosts}}</span>
-                    <span>{{len .Posts}} {{if eq (len .Posts) 1}}resource{{else}}resources{{end}}</span>
-                </div>
-            {{range .Years}}
-                <h2 class="mt-8 mb-3 font-mono text-sm text-slate-500 first-of-type:mt-0"><span class="text-k8s">#</span> {{.Year}}</h2>
-                <ul class="space-y-3">
-                    {{range .Posts}}
-                    <li>
-                        <a href="{{$.Lang.Prefix}}/posts/{{.Slug}}"{{if ne .Lang $.Lang.Code}} hreflang="{{.Lang}}"{{end}} class="group block rounded-xl border border-cluster-700 bg-cluster-900/80 backdrop-blur p-5 shadow-lg shadow-black/30 transition hover:border-k8s/60 hover:shadow-k8s/10">
-                            <time datetime="{{.Date.Format "2006-01-02"}}" class="font-mono text-xs text-emerald-300">{{$.Lang.ShortDate .Date}}</time>{{if ne .Lang $.Lang.Code}} <span class="ml-1 rounded border border-cluster-600 px-1 font-mono text-[10px] uppercase text-slate-400">{{.Lang}}</span>{{end}}
-                            <h3 lang="{{.Lang}}" class="mt-1 text-lg font-bold text-white transition group-hover:text-k8s-light">{{.Title}}</h3>
-                            {{if .Summary}}<p lang="{{.Lang}}" class="mt-2 text-sm text-slate-400">{{.Summary}}</p>{{end}}
-                        </a>
-                    </li>
-                    {{end}}
-                </ul>
-                {{end}}
-            </section>
+            {{with .Tags}}
+            <nav aria-label="{{$.T.TagsLabel}}" class="mb-4 flex flex-wrap items-center gap-1.5 font-mono text-xs">
+                <span class="mr-1 text-slate-500">{{$.T.TagsLabel}}:</span>
+                <a href="{{$.Lang.Prefix}}/posts" class="rounded border px-2 py-1 transition hover:border-k8s hover:text-white {{if $.Tag}}border-cluster-600 text-slate-400{{else}}border-k8s bg-k8s/20 text-white{{end}}"{{if not $.Tag}} aria-current="page"{{end}}>{{$.T.AllPosts}}</a>
+                {{range .}}<a href="{{$.Lang.Prefix}}/tags/{{.Name}}" class="rounded border px-2 py-1 transition hover:border-k8s hover:text-white {{if eq .Name $.Tag}}border-k8s bg-k8s/20 text-white{{else}}border-cluster-600 text-slate-400{{end}}"{{if eq .Name $.Tag}} aria-current="page"{{end}}><span class="text-k8s">#</span>{{.Name}} <span class="text-slate-600">{{.Count}}</span></a>{{end}}
+            </nav>
             {{end}}
+            <form role="search" action="{{.Path}}" method="get" hx-get="{{.Path}}" hx-trigger="input changed delay:250ms from:#post-search, submit" hx-target="#post-results" hx-swap="outerHTML" class="mb-6 flex items-center gap-2 rounded-lg border border-cluster-700 bg-cluster-900/80 px-3 font-mono text-sm focus-within:border-k8s/60">
+                <label for="post-search" class="shrink-0 text-k8s-light" title="{{.T.SearchLabel}}">/</label>
+                <input id="post-search" type="search" name="q" value="{{.Query}}" placeholder="{{.T.SearchPlaceholder}}" aria-label="{{.T.SearchLabel}}" autocomplete="off" maxlength="100" class="min-w-0 flex-1 bg-transparent py-2.5 text-slate-200 placeholder:text-slate-600 focus:outline-none">
+                <button type="submit" class="shrink-0 rounded border border-cluster-600 px-2 py-0.5 text-xs text-slate-400 transition hover:border-k8s hover:text-white">{{.T.SearchButton}}</button>
+            </form>
+            {{template "post-results" .}}
         </main>
         {{end}}{{end}}
 
@@ -351,3 +349,39 @@
     {{end}}
 </body>
 </html>
+
+{{define "post-results"}}
+<section id="post-results" aria-live="polite">
+    <div class="flex items-center justify-between mb-4 font-mono text-xs uppercase tracking-wider text-slate-500">
+        <span>{{if .Query}}{{.T.SearchResults}}{{else}}{{.T.LatestPosts}}{{end}}</span>
+        <span>{{len .Posts}}{{if .Query}}/{{.Total}}{{end}} {{if eq (len .Posts) 1}}resource{{else}}resources{{end}}</span>
+    </div>
+    {{if .Query}}
+    {{if .Posts}}
+    <ul class="space-y-3">
+        {{range .Posts}}{{template "post-card" (dict "Post" . "Root" $ "Year" true)}}{{end}}
+    </ul>
+    {{else}}
+    <p class="rounded-lg border border-cluster-700 bg-cluster-900/80 px-4 py-3 text-slate-400">{{printf .T.NoResults .Query}}</p>
+    {{end}}
+    {{else}}
+    {{range .Years}}
+    <h2 class="mt-8 mb-3 font-mono text-sm text-slate-500 first-of-type:mt-0"><span class="text-k8s">#</span> {{.Year}}</h2>
+    <ul class="space-y-3">
+        {{range .Posts}}{{template "post-card" (dict "Post" . "Root" $ "Year" false)}}{{end}}
+    </ul>
+    {{end}}
+    {{end}}
+</section>
+{{end}}
+
+{{define "post-card"}}{{$root := .Root}}{{with .Post}}
+<li class="group relative rounded-xl border border-cluster-700 bg-cluster-900/80 backdrop-blur p-5 shadow-lg shadow-black/30 transition hover:border-k8s/60 hover:shadow-k8s/10 focus-within:border-k8s/60">
+    <time datetime="{{.Date.Format "2006-01-02"}}" class="font-mono text-xs text-emerald-300">{{if $.Year}}{{$root.Lang.Date .Date}}{{else}}{{$root.Lang.ShortDate .Date}}{{end}}</time>{{if ne .Lang $root.Lang.Code}} <span class="ml-1 rounded border border-cluster-600 px-1 font-mono text-[10px] uppercase text-slate-400">{{.Lang}}</span>{{end}}
+    <h3 lang="{{.Lang}}" class="mt-1 text-lg font-bold text-white transition group-hover:text-k8s-light"><a href="{{$root.Lang.Prefix}}/posts/{{.Slug}}"{{if ne .Lang $root.Lang.Code}} hreflang="{{.Lang}}"{{end}} class="after:absolute after:inset-0 after:rounded-xl focus:outline-none">{{.Title}}</a></h3>
+    {{if .Summary}}<p lang="{{.Lang}}" class="mt-2 text-sm text-slate-400">{{.Summary}}</p>{{end}}
+    {{with .Tags}}<ul class="relative z-10 mt-3 flex flex-wrap gap-1.5 font-mono text-xs">
+        {{range .}}<li><a href="{{$root.Lang.Prefix}}/tags/{{.}}" class="rounded border border-cluster-600 px-1.5 py-0.5 text-slate-500 transition hover:border-k8s hover:text-white"><span class="text-k8s">#</span>{{.}}</a></li>{{end}}
+    </ul>{{end}}
+</li>
+{{end}}{{end}}
