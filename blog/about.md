@@ -31,12 +31,6 @@ Since 2022 I've been a DevOps engineer at EITCO in Bonn, where I design and buil
 - Wrote and maintained the installation documentation
 - 1st and 2nd level support for customers across North Rhine-Westphalia, on site and remote
 
-### Field Service Technician · Schwarz Direkt and TA Triumph-Adler
-
-*Jun 2014 – Apr 2019 · Bonn*
-
-Installed, maintained and repaired print and copy systems for customers, and trained colleagues internally.
-
 ## Education
 
 ### Master craftsman in information technology (Meister) · Chamber of Crafts Cologne

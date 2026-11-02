@@ -31,12 +31,6 @@ Seit 2022 bin ich DevOps Engineer bei der EITCO in Bonn und konzipiere und entwi
 - Erstellung und Pflege der Installationsdokumentation
 - 1st- und 2nd-Level-Support für Kunden in ganz NRW, vor Ort und remote
 
-### Kundendiensttechniker · Schwarz Direkt und TA Triumph-Adler
-
-*Juni 2014 – Apr. 2019 · Bonn*
-
-Installation, Wartung und Reparatur von Druck- und Kopiersystemen beim Kunden sowie interne Schulungen für Kolleginnen und Kollegen.
-
 ## Ausbildung
 
 ### Meister Informationstechniker · Handwerkskammer zu Köln
